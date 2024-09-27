@@ -1,0 +1,90 @@
+name: Update ICS Calendar and Deploy to GitHub Pages
+
+on:
+  schedule:
+    # Runs the workflow at the specified intervals (4 times a day)
+    - cron: "0 */6 * * *"  # Every 6 hours
+    - cron: "0 6 * * *"  # Run at 6:00 UTC every day
+    - cron: "0 7 * * *"  # Run at 7:00 UTC every day
+
+  workflow_dispatch:  # Allows manual triggering of the workflow
+
+  push:
+    branches: ["main"]  # This will trigger deployment when changes are pushed to main
+
+jobs:
+  update-calendar:
+    runs-on: windows-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Download the previous ICS artifact (if available)
+      - name: Download Previous ICS
+        uses: actions/download-artifact@v3
+        with:
+          name: calendar
+        continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
+
+      # Create .out directory
+      - name: Create .out directory
+        run: New-Item -ItemType Directory -Path .out
+        shell: pwsh
+
+      # Run your PowerShell script with secrets to generate the new ICS file
+      - name: Run PowerShell script to generate ICS
+        run: |
+          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }}
+        shell: pwsh
+
+      # Compare new ICS with the previous ICS (if it exists)
+      - name: Compare ICS Files
+        run: |
+          if (Test-Path previous-calendar.ics) {
+            echo "Comparing previous ICS with the new one:"
+            # Log the differences (like a 'git diff')
+            fc previous-calendar.ics .out/calendar.ics
+          } else {
+            echo "No previous ICS file found. This is the first run or no artifact was available."
+          }
+        shell: pwsh
+
+      # Upload the new ICS as an artifact for future comparison
+      - name: Upload ICS artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: calendar
+          path: .out/calendar.ics
+
+  deploy:
+    needs: update-calendar
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download ICS artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: calendar  # Name of the artifact
+          path: '.out'
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.out'  # Directory containing the build artifacts
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
