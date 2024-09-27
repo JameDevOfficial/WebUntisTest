@@ -5,16 +5,17 @@ param (
     [Parameter(Mandatory = $false)]
     [Alias("Date")]
     [ValidateScript({
-        if ($_.GetType().Name -eq 'String') {
-            if (-not [datetime]::TryParse($_, [ref] $null)) {
-                throw "Invalid date format. Please provide a valid date string."
+            if ($_.GetType().Name -eq 'String') {
+                if (-not [datetime]::TryParse($_, [ref] $null)) {
+                    throw "Invalid date format. Please provide a valid date string."
+                }
             }
-        } elseif ($_.GetType().Name -ne 'DateTime') {
-            throw "Invalid date format. Provide a date string or DateTime object."
-        }
-        $true
-    })]
-    [System.Object[]]$dates = @( (-7..14 | ForEach-Object { (Get-Date).AddDays($_) })[0,7,14] ),
+            elseif ($_.GetType().Name -ne 'DateTime') {
+                throw "Invalid date format. Provide a date string or DateTime object."
+            }
+            $true
+        })]
+    [System.Object[]]$dates = @( (-7..14 | ForEach-Object { (Get-Date).AddDays($_) })[0, 7, 14] ),
     [string]$OutputFilePath = "calendar.ics",
     [string]$cookie,
     [string]$tenantId
@@ -39,7 +40,8 @@ function Get-SingleElement {
 
         if ($elements.Count -eq 0) {
             throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
-        } elseif ($elements.Count -gt 1) {
+        }
+        elseif ($elements.Count -gt 1) {
             throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
         }
 
@@ -48,23 +50,23 @@ function Get-SingleElement {
 }
 
 $headers = @{
-    "authority"="$baseUrl"
-      "accept"="application/json"
-      "accept-encoding"="gzip, deflate, br, zstd"
-      "accept-language"="de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
-      "cache-control"="max-age=0"
-      "dnt"="1"
-      "pragma"="no-cache"
-      "priority"="u=0, i"
-      "sec-ch-ua"="`"Google Chrome`";v=`"131`", `"Chromium`";v=`"131`", `"Not_A Brand`";v=`"24`""
-      "sec-ch-ua-mobile"="?0"
-      "sec-ch-ua-platform"="`"Windows`""
-      "sec-fetch-dest"="document"
-      "sec-fetch-mode"="navigate"
-      "sec-fetch-site"="none"
-      "sec-fetch-user"="?1"
-      "upgrade-insecure-requests"="1"
-    }
+    "authority"                 = "$baseUrl"
+    "accept"                    = "application/json"
+    "accept-encoding"           = "gzip, deflate, br, zstd"
+    "accept-language"           = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
+    "cache-control"             = "max-age=0"
+    "dnt"                       = "1"
+    "pragma"                    = "no-cache"
+    "priority"                  = "u=0, i"
+    "sec-ch-ua"                 = "`"Google Chrome`";v=`"131`", `"Chromium`";v=`"131`", `"Not_A Brand`";v=`"24`""
+    "sec-ch-ua-mobile"          = "?0"
+    "sec-ch-ua-platform"        = "`"Windows`""
+    "sec-fetch-dest"            = "document"
+    "sec-fetch-mode"            = "navigate"
+    "sec-fetch-site"            = "none"
+    "sec-fetch-user"            = "?1"
+    "upgrade-insecure-requests" = "1"
+}
 
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -84,46 +86,48 @@ $rooms = [System.Collections.Generic.List[Room]]::new()
 
 foreach ($date in $dates) {
 
-Write-Host "Getting Data for week of ${$date.ToString("yyyy-mm-dd")}"
+    Write-Host "Getting Data for week of ${$date.ToString("yyyy-mm-dd")}"
 
-$url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
+    $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
 
-$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
-$object = $response | ConvertFrom-Json -ErrorAction Stop
+    $response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
+    $object = $response | ConvertFrom-Json -ErrorAction Stop
 
-$class = [PeriodTableEntry]
+    $class = [PeriodTableEntry]
 
-try {
-    $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
-    $object.data.result.data.elements | ForEach-Object { $legende.Add([PeriodTableEntry]::new($_)) }
+    try {
+        $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
+        $object.data.result.data.elements | ForEach-Object { $legende.Add([PeriodTableEntry]::new($_)) }
 
-    $legende | Where-Object { $_.type -eq 4 } | ForEach-Object { $rooms.Add([Room]::new($_)) }
-    $legende | Where-Object { $_.type -eq 3 } | ForEach-Object { $courses.Add([Course]::new($_)) }
+        $legende | Where-Object { $_.type -eq 4 } | ForEach-Object { $rooms.Add([Room]::new($_)) }
+        $legende | Where-Object { $_.type -eq 3 } | ForEach-Object { $courses.Add([Course]::new($_)) }
 
-    $class = ($legende.Where({ $_.id -eq $elementId }) | Get-SingleElement)
-    $class = [PSCustomObject]@{
-        name = $class.name
-        longName = $class.longName
-        displayname = $class.displayname
-        alternatename = $class.alternatename
-        backColor = $class.backColor
-    }
+        $class = ($legende.Where({ $_.id -eq $elementId }) | Get-SingleElement)
+        $class = [PSCustomObject]@{
+            name          = $class.name
+            longName      = $class.longName
+            displayname   = $class.displayname
+            alternatename = $class.alternatename
+            backColor     = $class.backColor
+        }
 
 
-    $object.data.result.data.elementPeriods.$elementId | ForEach-Object {
-        try {
-            $element = $_
-            $periods.Add([PeriodEntry]::new($_, $rooms, $courses)) 
-        } catch [FormatException] {
-            Write-Error ($element | Format-List | Out-String)
-            throw
+        $object.data.result.data.elementPeriods.$elementId | ForEach-Object {
+            try {
+                $element = $_
+                $periods.Add([PeriodEntry]::new($_, $rooms, $courses)) 
+            }
+            catch [FormatException] {
+                Write-Error ($element | Format-List | Out-String)
+                throw
+            }
         }
     }
-} catch [FormatException] {
-    Write-Error "Invalid Response regarding datetime format:"
-    throw
-    exit 1
-}
+    catch [FormatException] {
+        Write-Error "Invalid Response regarding datetime format:"
+        throw
+        exit 1
+    }
 
 }
 
@@ -143,10 +147,10 @@ $properties = $calendarEntries | Get-Member -MemberType Properties | Where-Objec
 
 # Use Select-Object to reorder properties and add calculated properties
 $calendarEntries | Select-Object (@(
-    @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } },
-    @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
-) + $properties + @{ 
-        Name = 'DescriptionF'; 
+        @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } },
+        @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
+    ) + $properties + @{ 
+        Name       = 'DescriptionF'; 
         Expression = { 
             $parts = $_.Description -split ';'
             $firstPart = $parts[0].Trim()
@@ -157,10 +161,12 @@ $calendarEntries | Select-Object (@(
                 if ($sourceIndex -ne -1) {
                     $source = $secondPart.Substring($sourceIndex + 7).Trim()
                     "$firstPart; source: $source"
-                } else {
+                }
+                else {
                     $firstPart
                 }
-            } else {
+            }
+            else {
                 $firstPart
             }
         } 
@@ -235,13 +241,15 @@ try {
         # Write the .ics content to a file
         Set-Content -Path $OutputFilePath -Value $icsContent
         Write-Output "ICS file created at $((Get-Item -Path $OutputFilePath).FullName)"
-    } else {
+    }
+    else {
         # Write the .ics content to a variable
         $icsVariable = $icsContent
         Write-Output $icsVariable
         return $icsVariable
     }
-} catch {
+}
+catch {
     Write-Error "An error occurred while creating the ICS file: $_"
     throw
 }
@@ -318,7 +326,8 @@ class PeriodEntry {
         $this.isEvent = $jsonObject.is.event
         if ($null -ne $jsonObject.rescheduleInfo) {
             $this.rescheduleInfo = [rescheduleInfo]::new($jsonObject.rescheduleInfo)
-        } else {
+        }
+        else {
             $this.rescheduleInfo = $null
         }
         $this.roomCapacity = $jsonObject.roomCapacity
