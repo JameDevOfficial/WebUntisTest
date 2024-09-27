@@ -1,20 +1,42 @@
-# WebUntisTimeTableToIcs
-
 ![Update ICS Calendar](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg)
+
+## Usage:
+1. Fork this repository 
+2. Enable GitHub Pages with workflow as source.
+3. Store the environment variables `BASE_URL`, `ELEMENT_ID`, `COOKIE` and `TENNANT_ID` in the repos **secrets**
+4. Adjust cronjob in ./.github/workflows/GeneratePage.yml to your needs.
 
 
 ## Overview
 
-This repository contains a GitHub Actions workflow and a PowerShell script to generate an ICS calendar file from a timetable. The workflow is scheduled to run at specific intervals and can also be triggered manually. The PowerShell script fetches data from a specified URL and generates the ICS file.
+This repository contains a GitHub Actions workflow and a PowerShell script to generate an ICS calendar file from a WebUntis timetable. The workflow is scheduled to run at specific intervals and can also be triggered manually. The PowerShell script fetches data from a specified URL and generates the ICS file for subscription.
+
+### PowerShell Script: `timeTableToIcs.ps1`
+
+The PowerShell script `timeTableToIcs.ps1` generates an ICS file from a timetable by making HTTP requests to your WebUntis URL. The script uses headers and cookies that can be exported from the Chrome Dev Console.
+
+#### Parameters
+
+- `baseUrl`: The base URL for the HTTP requests.
+- `elementType`: The return type of the request (default is `1`, I don't know what other values might return from the API).
+- `elementId`: The ID of the classes timetable. (Get from URL or Chrome Dev tools)
+- `date`: Accepts DateTime object(s) to determine and fetch the relevant week(s) content.
+- `OutputFilePath`: The output file path for the ICS file (default is `calendar.ics`).
+  (if left out the ICS content will be written to pipe and returned from the program)
+- `cookie`: The cookie value for authentication.
+- `tenantId`: The tenant ID for authentication.
 
 ### Workflow: `GeneratePage.yml`
 
-The GitHub Actions workflow `GeneratePage.yml` is designed to update the ICS calendar file at regular intervals and upon manual request. The workflow performs the following steps:
+The GitHub Actions workflow `GeneratePage.yml` is designed to update and deploy the ICS calendar file. The workflow performs the following steps:
 
-1. **Checkout Repository**: Checks out the repository to the GitHub Actions runner.
-2. **Download Previous ICS**: Downloads the previous ICS artifact if available.
-3. **Run PowerShell Script**: Executes the PowerShell script to generate a new ICS file.
-4. **Compare ICS Files**: Compares the newly generated ICS file with the previous one.
+1. **Download Previous ICS**: Downloads the previous ICS artifact if available.
+2. **Run PowerShell Script**: Executes the PowerShell script to generate a new ICS file.
+3. **Compare ICS Files**: Compares the newly generated ICS file with the previous one.
+4. **Upload ICS Artifact**: Uploads the newly generated ICS file as an artifact.
+5. **Setup Pages**: Configures GitHub Pages for deployment.
+6. **Upload Artifact**: Uploads the artifacts as a Pages artifact.
+7. **Deploy to GitHub Pages**: Deploys the uploaded artifact to GitHub Pages.
 
 #### Schedule
 
@@ -23,25 +45,18 @@ The workflow is scheduled to run at the following times:
 - Daily at 6:00 UTC
 - Daily at 7:00 UTC
 
-Additionally, the workflow can be triggered manually using the `workflow_dispatch` event.
+The workflow can also be triggered manually.
 
-### PowerShell Script: `timeTableToIcs.ps1`
+### Secrets File: `secrets.ps1`
 
-The PowerShell script `timeTableToIcs.ps1` generates an ICS file from a timetable by making HTTP requests to a specified URL. The script uses headers and cookies that can be exported from the Chrome Dev Console.
+The `secrets.ps1` file contains the necessary parameters for running the PowerShell script **locally**. This file should be kept secure and not be committed to version control.
 
-#### Parameters
-
-- `baseUrl`: The base URL for the HTTP requests.
-- `elementType`: The type of element (default is `1`).
-- `elementId`: The ID of the element.
-- `date`: The date for the timetable (default is the current date).
-- `OutputFilePath`: The output file path for the ICS file (default is `calendar.ics`).
-- `cookie`: The cookie value for authentication.
-- `tenantId`: The tenant ID for authentication.
-
-#### Usage
-
-To use the script, run the following command in PowerShell:
+#### Sample `secrets.ps1`
 
 ```powershell
-./timeTableToIcs.ps1 -OutputFilePath "calendar.ics" -baseUrl "<BASE_URL>" -elementType "<ELEMENT_TYPE>" -elementId "<ELEMENT_ID>" -cookie "<COOKIE>" -tenantId "<TENANT_ID>"
+# secrets.ps1
+[string]$baseUrl = "XXX.webuntis.com"
+[string]$elementId = 2280 # Course ID
+[string]$cookie = "_d3ZzcyBtYW5uaGVpbQ==" # Get by opening official page with dev tools and copy http request as powershell
+[string]$tenantId = "5028200" # Get by opening official page with dev tools and copy http request as powershell
+```

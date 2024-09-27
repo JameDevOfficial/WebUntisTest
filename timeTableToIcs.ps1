@@ -2,11 +2,50 @@ param (
     [string]$baseUrl,
     [int]$elementType = 1,
     [int]$elementId,
-    [string]$date = (Get-Date -Format "yyyy-MM-dd"),
+    [Parameter(Mandatory = $false)]
+    [Alias("Date")]
+    [ValidateScript({
+        if ($_.GetType().Name -eq 'String') {
+            if (-not [datetime]::TryParse($_, [ref] $null)) {
+                throw "Invalid date format. Please provide a valid date string."
+            }
+        } elseif ($_.GetType().Name -ne 'DateTime') {
+            throw "Invalid date format. Provide a date string or DateTime object."
+        }
+        $true
+    })]
+    [System.Object[]]$dates = @( (-7..14 | ForEach-Object { (Get-Date).AddDays($_) })[0,7,14] ),
     [string]$OutputFilePath = "calendar.ics",
     [string]$cookie,
     [string]$tenantId
 )
+
+# Convert any string inputs to DateTime objects
+$dates = $dates | ForEach-Object {
+    if ($_ -is [string]) { [datetime]::Parse($_) } else { $_ }
+}
+
+function Get-SingleElement {
+    param (
+        [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [System.Object[]]$collection
+    )
+
+    process {
+        $elements = @()
+        foreach ($item in $collection) {
+            $elements += $item
+        }
+
+        if ($elements.Count -eq 0) {
+            throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
+        } elseif ($elements.Count -gt 1) {
+            throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
+        }
+
+        return $elements[0]
+    }
+}
 
 $headers = @{
     "authority"="$baseUrl"
@@ -38,38 +77,21 @@ $session.Cookies.Add((New-Object System.Net.Cookie("Tenant-Id", "`"$tenantId`"",
 $session.Cookies.Add((New-Object System.Net.Cookie("traceId", "9de4710537aa097594b039ee3a591cfc22a6dd99", "/", "$baseUrl")))
 $session.Cookies.Add((New-Object System.Net.Cookie("JSESSIONID", "B9ED9B2D36BE7D25A7A9EF21E8144D3F", "/", "$baseUrl")))
 
-$url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$date&formatId=14"
-
-$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
-$object = $response | ConvertFrom-Json -ErrorAction Stop
-
 $periods = [System.Collections.Generic.List[PeriodEntry]]::new()
 
 $courses = [System.Collections.Generic.List[Course]]::new()
 $rooms = [System.Collections.Generic.List[Room]]::new()
+
+foreach ($date in $dates) {
+
+Write-Host "Getting Data for week of ${$date.ToString("yyyy-mm-dd")}"
+
+$url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
+
+$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
+$object = $response | ConvertFrom-Json -ErrorAction Stop
+
 $class = [PeriodTableEntry]
-
-function Get-SingleElement {
-    param (
-        [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [System.Object[]]$collection
-    )
-
-    process {
-        $elements = @()
-        foreach ($item in $collection) {
-            $elements += $item
-        }
-
-        if ($elements.Count -eq 0) {
-            throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
-        } elseif ($elements.Count -gt 1) {
-            throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
-        }
-
-        return $elements[0]
-    }
-}
 
 try {
     $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
@@ -103,6 +125,7 @@ try {
     exit 1
 }
 
+}
 
 $periods = $periods | Sort-Object -Property startTime
 
@@ -120,8 +143,8 @@ $properties = $calendarEntries | Get-Member -MemberType Properties | Where-Objec
 
 # Use Select-Object to reorder properties and add calculated properties
 $calendarEntries | Select-Object (@(
-    @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmssZ", $null).ToString("dd.MM.yy HH:mm") } },
-    @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmssZ", $null).ToString("dd.MM.yy HH:mm") } }
+    @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } },
+    @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
 ) + $properties + @{ 
         Name = 'DescriptionF'; 
         Expression = { 
@@ -160,8 +183,8 @@ class IcsEvent {
     [string]$Category
 
     IcsEvent([PeriodEntry]$period) {
-        $this.startTime = $period.startTime.ToString("yyyyMMddTHHmmssZ")
-        $this.endTime = $period.endTime.ToString("yyyyMMddTHHmmssZ")
+        $this.startTime = $period.startTime.ToString("yyyyMMddTHHmmss")
+        $this.endTime = $period.endTime.ToString("yyyyMMddTHHmmss")
         $this.location = $period.room.room.longName
         $this.summary = $period.course.course.longName
         $this.description = $period.substText
