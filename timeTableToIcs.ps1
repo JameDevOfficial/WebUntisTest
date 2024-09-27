@@ -1,6 +1,48 @@
+<#
+.SYNOPSIS
+    Converts a WebUntis timetable to an ICS calendar file.
+
+.DESCRIPTION
+    This script retrieves timetable data from the WebUntis API and converts it into an ICS calendar file format. 
+    It allows specifying a date range for the timetable data.
+
+.PARAMETER baseUrl
+    The base URL of the WebUntis API.
+
+.PARAMETER elementType
+    The type of element to filter by (default is 1, this should return a timetable).
+
+.PARAMETER elementId
+    The classes timetable ID.
+
+.PARAMETER dates
+    An array of dates (either as strings or DateTime objects) for which to retrieve timetable data. 
+    The default is the current week and the next three weeks.
+
+.PARAMETER OutputFilePath
+    The file path where the ICS file will be saved. The default is "calendar.ics".
+
+.PARAMETER cookie
+    The cookie value for the WebUntis session.
+
+.PARAMETER tenantId
+    The tenant ID for the WebUntis session.
+
+.EXAMPLE
+    .\timeTableToIcs.ps1 -baseUrl "your.webuntis.url" -elementType 1 -elementId 12345 -dates "2023-01-01", "2023-01-08" -OutputFilePath "mycalendar.ics" -cookie "your_cookie" -tenantId "your_tenant_id"
+
+.NOTES
+    Author: Markus Noack
+    Date: 2024-09-28
+    Version: 1.0
+#>
+
 param (
+    [ValidateNotNullOrEmpty()]
+    [Alias("URL")]
     [string]$baseUrl,
     [int]$elementType = 1,
+    [Alias("TimeTableID")]
     [int]$elementId,
     [Parameter(Mandatory = $false)]
     [Alias("Date")]
@@ -15,15 +57,23 @@ param (
             }
             $true
         })]
-    [System.Object[]]$dates = @( (-7..14 | ForEach-Object { (Get-Date).AddDays($_) })[0, 7, 14] ),
+    [System.Object[]]$dates = @( (@(-7, 0, 7, 14) | ForEach-Object { (Get-Date).AddDays($_) }) ),
+    [ValidateNotNullOrEmpty()]
     [string]$OutputFilePath = "calendar.ics",
+    [ValidateNotNullOrEmpty()]
     [string]$cookie,
+    [ValidateNotNullOrEmpty()]
     [string]$tenantId
 )
 
+$datesCount = 0
 # Convert any string inputs to DateTime objects
 $dates = $dates | ForEach-Object {
+    $datescount++
     if ($_ -is [string]) { [datetime]::Parse($_) } else { $_ }
+}
+if ($datesCount -gt 4) {
+    throw "The maximum number of weeks is 4. (Limit by WebUntis API)"
 }
 
 function Get-SingleElement {
@@ -80,7 +130,6 @@ $session.Cookies.Add((New-Object System.Net.Cookie("traceId", "9de4710537aa09759
 $session.Cookies.Add((New-Object System.Net.Cookie("JSESSIONID", "B9ED9B2D36BE7D25A7A9EF21E8144D3F", "/", "$baseUrl")))
 
 $periods = [System.Collections.Generic.List[PeriodEntry]]::new()
-
 $courses = [System.Collections.Generic.List[Course]]::new()
 $rooms = [System.Collections.Generic.List[Room]]::new()
 
@@ -178,6 +227,37 @@ $IcsEntries = [System.Collections.Generic.List[string]]::new()
 foreach ($icsEvent in $calendarEntries) {
     $IcsEntries += $icsEvent.ToIcsEntry()
 }
+   
+
+# Create the .ics file content
+$icsContent = @"
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Chaos_02//WebUntisToIcs//EN
+X-WR-CALNAME:$($class.displayname)
+$(($IcsEntries -join "`n"))
+END:VCALENDAR
+"@
+
+try {
+    if ($OutputFilePath) {
+        # Write the .ics content to a file
+        Set-Content -Path $OutputFilePath -Value $icsContent
+        Write-Output "ICS file created at $((Get-Item -Path $OutputFilePath).FullName)"
+    }
+    else {
+        # Write the .ics content to a variable
+        $icsVariable = $icsContent
+        Write-Output $icsVariable
+        return $icsVariable
+    }
+}
+catch {
+    Write-Error "An error occurred while creating the ICS file: $_"
+    throw
+}
+
+####### Class definitions #######
 
 class IcsEvent {
     [string]$StartTime
@@ -222,36 +302,6 @@ CATEGORIES:$($this.Category)
 END:VEVENT
 "@
     }
-}
-
-    
-
-# Create the .ics file content
-$icsContent = @"
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Chaos_02//WebUntisToIcs//EN
-X-WR-CALNAME:$($class.displayname)
-$(($IcsEntries -join "`n"))
-END:VCALENDAR
-"@
-
-try {
-    if ($OutputFilePath) {
-        # Write the .ics content to a file
-        Set-Content -Path $OutputFilePath -Value $icsContent
-        Write-Output "ICS file created at $((Get-Item -Path $OutputFilePath).FullName)"
-    }
-    else {
-        # Write the .ics content to a variable
-        $icsVariable = $icsContent
-        Write-Output $icsVariable
-        return $icsVariable
-    }
-}
-catch {
-    Write-Error "An error occurred while creating the ICS file: $_"
-    throw
 }
 
 class rescheduleInfo {
