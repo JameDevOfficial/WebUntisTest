@@ -78,20 +78,20 @@ if ($datesCount -gt 4) {
 
 function Get-SingleElement {
     param (
-        [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [Parameter(ValueFromPipeline = $true)]#, ValueFromPipelineByPropertyName = $true)]
         [System.Object[]]$collection
     )
 
     process {
         $elements = @()
-        foreach ($item in $collection) {
+        foreach ($item in $collection) { # Unify for generic access
             $elements += $item
         }
 
-        if ($elements.Count -eq 0) {
+        if ($elements.Length -eq 0) {
             throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
         }
-        elseif ($elements.Count -gt 1) {
+        elseif ($elements.Length -gt 1) {
             throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
         }
 
@@ -132,10 +132,11 @@ $session.Cookies.Add((New-Object System.Net.Cookie("JSESSIONID", "B9ED9B2D36BE7D
 $periods = [System.Collections.Generic.List[PeriodEntry]]::new()
 $courses = [System.Collections.Generic.List[Course]]::new()
 $rooms = [System.Collections.Generic.List[Room]]::new()
+$legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
 
 foreach ($date in $dates) {
 
-    Write-Host "Getting Data for week of ${$date.ToString("yyyy-mm-dd")}"
+    Write-Host "Getting Data for week of $($date.ToString("yyyy-mm-dd"))"
 
     $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
 
@@ -145,11 +146,21 @@ foreach ($date in $dates) {
     $class = [PeriodTableEntry]
 
     try {
-        $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
-        $object.data.result.data.elements | ForEach-Object { $legende.Add([PeriodTableEntry]::new($_)) }
-
-        $legende | Where-Object { $_.type -eq 4 } | ForEach-Object { $rooms.Add([Room]::new($_)) }
-        $legende | Where-Object { $_.type -eq 3 } | ForEach-Object { $courses.Add([Course]::new($_)) }
+        $object.data.result.data.elements | ForEach-Object {
+            if ($legende.FindAll({ param($e) $e.id -eq $_.id -and $e.type -eq $_.type }).Count -eq 0) { # prevent duplicates
+                $legende.Add([PeriodTableEntry]::new($_)) 
+            } 
+        }
+        $legende | Where-Object { $_.type -eq 4 } | ForEach-Object {
+            if ($rooms.FindAll({ param($e) $e.id -eq $_.id}).Count -eq 0) { # prevent duplicates
+                $rooms.Add([Room]::new($_)) 
+            } 
+        }
+        $legende | Where-Object { $_.type -eq 3 } | ForEach-Object {
+            if ($courses.FindAll({ param($e) $e.id -eq $_.id}).Count -eq 0) { # prevent duplicates
+                $courses.Add([Course]::new($_))
+            } 
+        }
 
         $class = ($legende.Where({ $_.id -eq $elementId }) | Get-SingleElement)
         $class = [PSCustomObject]@{
@@ -166,7 +177,7 @@ foreach ($date in $dates) {
                 $element = $_
                 $periods.Add([PeriodEntry]::new($_, $rooms, $courses)) 
             }
-            catch [FormatException] {
+            catch { #[FormatException] {
                 Write-Error ($element | Format-List | Out-String)
                 throw
             }
@@ -396,7 +407,10 @@ class RoomEntry {
     [string]$state
 
     RoomEntry([PSCustomObject]$jsonObject, [System.Collections.Generic.List[Room]]$rooms) {
-        $this.room = $rooms | Where-Object { $_.id -eq $jsonObject.id } | Get-SingleElement
+        Write-Debug "RoomEntry: $($jsonObject)"
+        $problemObject = $jsonObject 
+        $tmp = $rooms | Where-Object { $_.id -eq $jsonObject.id } | Get-SingleElement
+        $this.room = $tmp
         $this.orgId = $jsonObject.orgId
         $this.missing = $jsonObject.missing
         $this.state = $jsonObject.state
