@@ -58,6 +58,7 @@ param (
             $true
         })]
     [System.Object[]]$dates = @( (@(-7, 0, 7, 14) | ForEach-Object { (Get-Date).AddDays($_) }) ),
+    [switch]$dontCreateMultiDayEvents,
     [ValidateNotNullOrEmpty()]
     [string]$OutputFilePath = "calendar.ics",
     [ValidateNotNullOrEmpty()]
@@ -97,6 +98,12 @@ function Get-SingleElement {
 
         return $elements[0]
     }
+}
+
+# Function to calculate the week start date (Monday) for a given date
+function Get-WeekStartDate($date) {
+    $offset = ($date.DayOfWeek.value__ + 6) % 7
+    return $date.Date.AddDays(-$offset)
 }
 
 $headers = @{
@@ -195,6 +202,51 @@ foreach ($date in $dates) {
 }
 
 $periods = $periods | Sort-Object -Property startTime
+
+if (-not $dontCreateMultiDayEvents) {
+    # Add WeekStartDate property to each period
+    $periods | ForEach-Object {
+        $_ | Add-Member -NotePropertyName WeekStartDate -NotePropertyValue (Get-WeekStartDate $_.startTime) -Force
+    }
+
+    # Group periods by WeekStartDate
+    $periodsGroupedByWeek = $periods | Group-Object -Property WeekStartDate
+
+    # Initialize an array to hold the new multi-day elements
+    $multiDayEvents = [System.Collections.Generic.List[PeriodEntry]]::new()
+
+    # Process each week group
+    foreach ($group in $periodsGroupedByWeek) {
+
+        $firstPeriod = $group.Group[0]
+        $lastPeriod = $group.Group[-1]
+
+        $culture = [System.Globalization.CultureInfo]::CurrentCulture
+        $calendar = $culture.Calendar
+        $weekOfYear = $calendar.GetWeekOfYear($firstPeriod.startTime, $culture.DateTimeFormat.CalendarWeekRule, $culture.DateTimeFormat.FirstDayOfWeek)
+
+
+        # Create a new JSON object with necessary properties
+        $newJsonObject = [PSCustomObject]@{
+            date = $firstPeriod.startTime.Date.ToString("yyyyMMdd")
+            startTime = $firstPeriod.startTime.ToString("hhmm")
+            endTime = $lastPeriod.endTime
+            location = ""
+            summary = "Calendar Week $weekOfYear"
+            description = "for setting longer notifications after some weeks of absence"
+            lessonCode = "SUMMARY"
+            cellstate = "ADDITIONAL"
+        }
+
+        # Create the new PeriodEntry
+        $newElement = [PeriodEntry]::new($newJsonObject, $rooms, $courses)
+
+        # Add the new element to the array
+        $multiDayEvents.Add($newElement)
+    }
+
+    $periods = ($multiDayEvents + $periods)
+}
 
 $calendarEntries = [System.Collections.Generic.List[IcsEvent]]::new()
 
@@ -401,7 +453,11 @@ class PeriodEntry {
         $this.periodAttachments = $jsonObject.periodAttachments
         $this.substText = $jsonObject.substText
         $this.startTime = [datetime]::ParseExact($jsonObject.date.ToString(), "yyyyMMdd", $null).Add([timespan]::ParseExact($jsonObject.startTime.ToString().PadLeft(4, '0'), "hhmm", $null))
-        $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), "hhmm", $null))
+        if ($jsonObject.endTime -is [DateTime]) {
+            $this.endTime = $jsonObject.endTime
+        } else {
+            $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), "hhmm", $null))
+        }
         $this.room = [RoomEntry]::new(($jsonObject.elements | Where-Object { $_.type -eq 4 } | Get-SingleElement), $rooms)
         $this.course = [CourseEntry]::new(($jsonObject.elements | Where-Object { $_.type -eq 3 } | Get-SingleElement), $courses)
         $this.studentGroup = $jsonObject.studentGroup
