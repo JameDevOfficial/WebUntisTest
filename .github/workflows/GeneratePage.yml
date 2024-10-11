@@ -1,59 +1,98 @@
-name: Update ICS Calendar and Deploy to GitHub Pages
+name: Update Calendar and Deploy to GitHub Pages
 
 on:
   schedule:
-    # Runs the workflow at the specified intervals (4 times a day)
+    # Runs the workflow at the specified intervals
     - cron: "0 */6 * * *"  # Every 6 hours
-    - cron: "0 6 * * *"  # Run at 6:00 UTC every day
-    - cron: "0 7 * * *"  # Run at 7:00 UTC every day
+    - cron: "0 6 * * *"    # Run at 6:00 UTC every day
+    - cron: "0 7 * * *"    # Run at 7:00 UTC every day
 
   workflow_dispatch:  # Allows manual triggering of the workflow
 
   push:
     branches: ["main"]  # This will trigger deployment when changes are pushed to main
 
+permissions:
+  actions: read        # Allow reading of workflow run details and artifacts
+  contents: read       # Allow reading repository contents
+
 jobs:
   update-calendar:
     runs-on: windows-latest
+    outputs:
+      changes_detected: ${{ steps.compare.outputs.changes_detected }}
 
     steps:
       # Checkout the repository
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # Download the previous ICS artifact (if available)
-      - name: Download Previous ICS
-        uses: actions/download-artifact@v3
+      # Download the previous script output (if available)
+      - name: Download Previous Script Output
+        uses: dawidd6/action-download-artifact@v2
         with:
-          name: calendar
+          workflow: GeneratePage.yml  # Your workflow file name
+          name: script-output         # Name of the artifact to download
+          path: previous_script_output.txt
+          branch: main
         continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
 
-      # Create .out directory
-      - name: Create .out directory
-        run: New-Item -ItemType Directory -Path .out
+      # Debugging: List files after downloading the artifact
+      - name: List Files After Download
+        run: |
+          Write-Host "Files in current directory:"
+          Get-ChildItem -Recurse
         shell: pwsh
 
-      # Run your PowerShell script with secrets to generate the new ICS file
-      - name: Run PowerShell script to generate ICS
-        run: |
-          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }}
+      # Create output directory
+      - name: Create Output Directory
+        run: New-Item -ItemType Directory -Path .out -Force
         shell: pwsh
 
-      # Compare new ICS with the previous ICS (if it exists)
-      - name: Compare ICS Files
+      # Run your PowerShell script and capture output
+      - name: Run PowerShell Script and Capture Output
         run: |
-          if (Test-Path previous-calendar.ics) {
-            echo "Comparing previous ICS with the new one:"
-            # Log the differences (like a 'git diff')
-            fc previous-calendar.ics .out/calendar.ics
+          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+        shell: pwsh
+
+      # Compare new script output with the previous script output
+      - name: Compare Script Outputs
+        id: compare
+        run: |
+          $previousScriptOutputPath = "previous_script_output.txt/script_output.txt"
+          Write-Host "Previous script output path: $previousScriptOutputPath"
+
+          if (Test-Path $previousScriptOutputPath) {
+            Write-Host "Comparing previous script output with the new one:"
+            # Compare the two files
+            $diff = Compare-Object -ReferenceObject (Get-Content $previousScriptOutputPath) -DifferenceObject (Get-Content script_output.txt) | Out-String
+            if ($diff -ne "") {
+              Write-Host "::group::Differences found in script output:"
+              Write-Host "$diff"
+              Write-Host "::endgroup::"
+              Write-Host "::notice::Changes detected in script output."
+              echo "changes_detected=true" >> $env:GITHUB_OUTPUT
+            } else {
+              Write-Host "No differences found in script output."
+              echo "changes_detected=false" >> $env:GITHUB_OUTPUT
+            }
           } else {
-            echo "No previous ICS file found. This is the first run or no artifact was available."
+            Write-Host "No previous script output found. Assuming changes."
+            Write-Host "::notice::No previous script output found. Assuming changes."
+            echo "changes_detected=true" >> $env:GITHUB_OUTPUT
           }
         shell: pwsh
 
-      # Upload the new ICS as an artifact for future comparison
-      - name: Upload ICS artifact
-        uses: actions/upload-artifact@v3
+      # Upload the new script output as an artifact for future comparison
+      - name: Upload Script Output Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: script-output
+          path: script_output.txt
+
+      # Upload the new ICS as an artifact (for deployment)
+      - name: Upload ICS Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: calendar
           path: .out/calendar.ics
@@ -61,6 +100,7 @@ jobs:
   deploy:
     needs: update-calendar
     runs-on: ubuntu-latest
+    if: needs.update-calendar.outputs.changes_detected == 'true'
 
     permissions:
       contents: read
@@ -71,16 +111,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download ICS artifact
-        uses: actions/download-artifact@v3
+      - name: Download ICS Artifact
+        uses: actions/download-artifact@v4
         with:
-          name: calendar  # Name of the artifact
+          name: calendar
           path: '.out'
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.out'  # Directory containing the build artifacts

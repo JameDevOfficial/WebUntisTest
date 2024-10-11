@@ -139,7 +139,7 @@ $isDaylightSavingTime = (Get-Date).IsDaylightSavingTime()
 
 foreach ($date in $dates) {
 
-    Write-Host "Getting Data for week of $($date.ToString("yyyy-mm-dd"))"
+    Write-Host "Getting Data for week of $($date.ToString("yyyy-MM-dd"))"
 
     $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
 
