@@ -134,6 +134,9 @@ $courses = [System.Collections.Generic.List[Course]]::new()
 $rooms = [System.Collections.Generic.List[Room]]::new()
 $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
 
+# Check whether the current date is in Daylight Saving Time
+$isDaylightSavingTime = (Get-Date).IsDaylightSavingTime()
+
 foreach ($date in $dates) {
 
     Write-Host "Getting Data for week of $($date.ToString("yyyy-mm-dd"))"
@@ -197,6 +200,11 @@ $calendarEntries = [System.Collections.Generic.List[IcsEvent]]::new()
 
 # Iterate over each period and create calendar entries
 foreach ($period in $periods) {
+    if ($isDaylightSavingTime) {
+        $period.startTime = $period.startTime.AddHours(-1)
+        $period.endTime = $period.endTime.AddHours(-1)
+    }
+
     $calendarEntries.Add([IcsEvent]::new($period))
 }
 
@@ -246,9 +254,25 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Chaos_02//WebUntisToIcs//EN
 X-WR-CALNAME:$($class.displayname)
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:STANDARD
+DTSTART:19710101T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19710101T020000
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+END:DAYLIGHT
+END:VTIMEZONE
 $(($IcsEntries -join "`n"))
 END:VCALENDAR
 "@
+
 
 try {
     if ($OutputFilePath) {
@@ -303,8 +327,8 @@ class IcsEvent {
     [string] ToIcsEntry() {
         return @"
 BEGIN:VEVENT
-DTSTART:$($this.StartTime)
-DTEND:$($this.EndTime)
+DTSTART;TZID=Europe/Berlin:$($this.StartTime)
+DTEND;TZID=Europe/Berlin:$($this.EndTime)
 LOCATION:$($this.Location)
 SUMMARY:$($this.Summary)
 DESCRIPTION:$($this.Description)
@@ -313,6 +337,7 @@ CATEGORIES:$($this.Category)
 END:VEVENT
 "@
     }
+    
 }
 
 class rescheduleInfo {
