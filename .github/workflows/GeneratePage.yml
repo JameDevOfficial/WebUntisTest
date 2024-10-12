@@ -36,6 +36,15 @@ jobs:
           path: previous_script_output.txt
           branch: main
         continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
+        # Download the previous script output (if available)
+      - name: Download Previous ICS
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: GeneratePage.yml  # Your workflow file name
+          name: calendar
+          path: previous_calendar.ics
+          branch: main
+        continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
 
       # Debugging: List files after downloading the artifact
       - name: List Files After Download
@@ -52,7 +61,12 @@ jobs:
       # Run your PowerShell script and capture output
       - name: Run PowerShell Script and Capture Output
         run: |
-          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+          if (Test-Path "./previous_calendar.ics/calendar.ics") {
+            Write-Host ::notice::Appending to the previous calendar.
+            ./timeTableToIcs.ps1 -appendToPreviousICSat "./previous_calendar.ics/calendar.ics" -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+          } else {
+            ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+          }
         shell: pwsh
 
       # Compare new script output with the previous script output

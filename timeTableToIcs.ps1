@@ -64,6 +64,18 @@ param (
     [ValidateNotNullOrEmpty()]
     [hashtable]$overrideSummaries,
     [ValidateNotNullOrEmpty()]
+    [ValidateScript({
+        if (-not (Test-Path $_)) {
+            throw "File does not exist: $_"
+        }
+        $content = Get-Content $_ -Raw
+        if ($content -notmatch '^BEGIN:VCALENDAR' -or $content -notmatch 'END:VCALENDAR\s*$') {
+            throw "Invalid .ics file: $_"
+        }
+        $true
+    })]
+    [string]$appendToPreviousICSat,
+    [ValidateNotNullOrEmpty()]
     [string]$cookie,
     [ValidateNotNullOrEmpty()]
     [string]$tenantId
@@ -232,15 +244,21 @@ if (-not $dontCreateMultiDayEvents) {
         $calendar = $culture.Calendar
         $weekOfYear = $calendar.GetWeekOfYear($firstPeriod.startTime, $culture.DateTimeFormat.CalendarWeekRule, $culture.DateTimeFormat.FirstDayOfWeek)
 
+        do {
+            $id = [System.Math]::Abs([System.BitConverter]::ToInt32([System.Guid]::NewGuid().ToByteArray(), 0))
+        } while ($periods.Where({$_.id -eq $id}).Count -ne 0)
+
+        
 
         # Create a new JSON object with necessary properties
         $newJsonObject = [PSCustomObject]@{
+            id = $id
             date = $firstPeriod.startTime.Date.ToString("yyyyMMdd")
             startTime = $firstPeriod.startTime.ToString("hhmm")
             endTime = $lastPeriod.endTime
             location = ""
-            summary = "Calendar Week $weekOfYear"
-            description = "for setting longer notifications after some weeks of absence"
+            summary = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
+            substText = "for setting longer notifications after some weeks of absence"
             lessonCode = "SUMMARY"
             cellstate = "ADDITIONAL"
         }
@@ -267,13 +285,35 @@ foreach ($period in $periods) {
     $calendarEntries.Add([IcsEvent]::new($period))
 }
 
+$existingIcsEvents = [System.Collections.Generic.List[IcsEvent]]::new()
+
+if ($appendToPreviousICSat) {
+    Write-Host "Appending to previous ICS file $appendToPreviousICSat"
+    $content = Get-Content $appendToPreviousICSat -Raw
+    $veventPattern = '(?s)BEGIN:VEVENT.*?END:VEVENT'
+    $existingEntries = [regex]::Matches($content, $veventPattern) | ForEach-Object { $_.Value }
+    
+    foreach ($entry in $existingEntries) {
+        $previousIcsEvent = [IcsEvent]::new($entry)
+        if ($previousIcsEvent.Category -ne "SUMMARY") {
+            if ($calendarEntries.where({ $_.UID -eq $previousIcsEvent.UID }).Count -lt 1) {
+                $existingIcsEvents.Add($previousIcsEvent)
+            } else {
+                Write-Verbose "Skipping existing entry $($previousIcsEvent.UID)"
+            }
+        } else { Write-Verbose "Skipping SUMMARY entry $($previousIcsEvent.StartTime) - $($previousIcsEvent.EndTime)" }
+    }
+    $calendarEntries = ($existingIcsEvents + $calendarEntries)
+}
+
 # Get all properties except StartTime and EndTime
 $properties = $calendarEntries | Get-Member -MemberType Properties | Where-Object {
-    $_.Name -ne 'StartTime' -and $_.Name -ne 'EndTime' -and $_.Name -ne 'Description'
+    $_.Name -ne 'StartTime' -and $_.Name -ne 'EndTime' -and $_.Name -ne 'Description' -and $_.Name -ne 'UID' -and $_.Name -ne 'preExist'
 } | Select-Object -ExpandProperty Name
 
 # Use Select-Object to reorder properties and add calculated properties
 $calendarEntries | Select-Object (@(
+        @{ Name = 'pre'; Expression = { if ($_.preExist) {"[X]"} else {"[ ]"} } },
         @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } },
         @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
     ) + $properties + @{ 
@@ -354,6 +394,7 @@ catch {
 ####### Class definitions #######
 
 class IcsEvent {
+    [string]$UID
     [string]$StartTime
     [string]$EndTime
     [string]$Location
@@ -361,8 +402,10 @@ class IcsEvent {
     [string]$Description
     [string]$Status
     [string]$Category
+    [bool]$preExist = $false
 
     IcsEvent([PeriodEntry]$period) {
+        $this.UID = $period.id
         $this.startTime = $period.startTime.ToString("yyyyMMddTHHmmss")
         $this.endTime = $period.endTime.ToString("yyyyMMddTHHmmss")
         $this.location = $period.room.room.longName
@@ -383,9 +426,28 @@ class IcsEvent {
         }
     }
 
+    IcsEvent([string]$icsText) {
+        if ($icsText -notmatch 'BEGIN:VEVENT' -or ($icsText -match 'BEGIN:VEVENT' -and ($icsText -match 'BEGIN:VEVENT.*BEGIN:VEVENT'))) {
+            throw "Invalid Syntax in ICS entry. Only one VEVENT element is allowed."
+        }
+        if ($icsText -notmatch 'END:VEVENT' -or ($icsText -match 'END:VEVENT' -and ($icsText -match 'END:VEVENT.*END:VEVENT'))) {
+            throw "Invalid Syntax in ICS entry. Only one VEVENT element is allowed."
+        }
+        $this.preExist = $true
+        if ($icsText -match 'UID:(.*)') { $this.UID = $matches[1].Trim() } else { throw "UID not found in ICS entry." }
+        if ($icsText -match 'DTSTART;TZID=.*:(.*)') { $this.StartTime = $matches[1].Trim() } else { throw "StartTime not found in ICS entry." }
+        if ($icsText -match 'DTEND;TZID=.*:(.*)') { $this.EndTime = $matches[1].Trim() } else { throw "EndTime not found in ICS entry." }
+        if ($icsText -match 'LOCATION:(.*)') { $this.Location = $matches[1].Trim() } else { throw "Location not found in ICS entry." }
+        if ($icsText -match 'SUMMARY:(.*)') { $this.Summary = $matches[1].Trim() } else { throw "Summary not found in ICS entry." }
+        if ($icsText -match 'DESCRIPTION:(.*)') { $this.Description = $matches[1].Trim() } else { throw "Description not found in ICS entry." }
+        if ($icsText -match 'STATUS:(.*)') { $this.Status = $matches[1].Trim() } else { throw "Status not found in ICS entry." }
+        if ($icsText -match 'CATEGORIES:(.*)') { $this.Category = $matches[1].Trim() } else { throw "Category not found in ICS entry." }
+    }
+
     [string] ToIcsEntry() {
         return @"
 BEGIN:VEVENT
+UID:$($this.UID)
 DTSTART;TZID=Europe/Berlin:$($this.StartTime)
 DTEND;TZID=Europe/Berlin:$($this.EndTime)
 LOCATION:$($this.Location)
