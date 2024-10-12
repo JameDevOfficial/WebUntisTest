@@ -52,7 +52,7 @@ jobs:
       # Run your PowerShell script and capture output
       - name: Run PowerShell Script and Capture Output
         run: |
-          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+          ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
         shell: pwsh
 
       # Compare new script output with the previous script output

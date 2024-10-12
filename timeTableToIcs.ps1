@@ -62,6 +62,8 @@ param (
     [ValidateNotNullOrEmpty()]
     [string]$OutputFilePath = "calendar.ics",
     [ValidateNotNullOrEmpty()]
+    [hashtable]$overrideSummaries,
+    [ValidateNotNullOrEmpty()]
     [string]$cookie,
     [ValidateNotNullOrEmpty()]
     [string]$tenantId
@@ -146,7 +148,7 @@ $isDaylightSavingTime = (Get-Date).IsDaylightSavingTime()
 
 foreach ($date in $dates) {
 
-    Write-Host "Getting Data for week of $($date.ToString("yyyy-MM-dd"))"
+    Write-Verbose "Getting Data for week of $($date.ToString("yyyy-MM-dd"))"
 
     $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
 
@@ -168,6 +170,11 @@ foreach ($date in $dates) {
         }
         $legende | Where-Object { $_.type -eq 3 } | ForEach-Object {
             if ($courses.FindAll({ param($e) $e.id -eq $_.id}).Count -eq 0) { # prevent duplicates
+                if ($overrideSummaries) {
+                    if ($overrideSummaries.Contains($_.name)) {
+                        $_.longName = $overrideSummaries[$_.name]
+                    }
+                }
                 $courses.Add([Course]::new($_))
             } 
         }
