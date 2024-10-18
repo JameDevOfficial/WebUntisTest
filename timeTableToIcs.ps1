@@ -57,21 +57,20 @@
 
 param (
     [ValidateNotNullOrEmpty()]
-    [Alias("URL")]
+    [Alias('URL')]
     [string]$baseUrl,
     [int]$elementType = 1,
-    [Alias("TimeTableID")]
+    [Alias('TimeTableID')]
     [int]$elementId,
     [Parameter(Mandatory = $false)]
-    [Alias("Date")]
+    [Alias('Date')]
     [ValidateScript({
             if ($_.GetType().Name -eq 'String') {
                 if (-not [datetime]::TryParse($_, [ref] $null)) {
-                    throw "Invalid date format. Please provide a valid date string."
+                    throw 'Invalid date format. Please provide a valid date string.'
                 }
-            }
-            elseif ($_.GetType().Name -ne 'DateTime') {
-                throw "Invalid date format. Provide a date string or DateTime object."
+            } elseif ($_.GetType().Name -ne 'DateTime') {
+                throw 'Invalid date format. Provide a date string or DateTime object.'
             }
             $true
         })]
@@ -81,23 +80,23 @@ param (
         Position = 0,
         ValueFromPipeline = $true,
         ValueFromPipelineByPropertyName = $true,
-        HelpMessage = "Output file path."
+        HelpMessage = 'Output file path.'
     )]
-    [Alias("PSPath")]
+    [Alias('PSPath')]
     [ValidateNotNullOrEmpty()]
-    [ValidateScript({ $_.EndsWith(".ics") })] 
-    [string]$OutputFilePath = "calendar.ics",
+    [ValidateScript({ $_.EndsWith('.ics') })] 
+    [string]$OutputFilePath = 'calendar.ics',
     # Specifies a path to one or more locations.
     [ValidateNotNullOrEmpty()]
     [Parameter(
         ValueFromPipelineByPropertyName = $true,
-        HelpMessage = "A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name."
+        HelpMessage = 'A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.'
         #Mandatory = {$splitByOverride}
     )]
     [hashtable]$overrideSummaries,
     [Parameter(
         ValueFromPipelineByPropertyName = $true,
-        HelpMessage = "Path to an existing ICS file to which the new timetable data should be appended."
+        HelpMessage = 'Path to an existing ICS file to which the new timetable data should be appended.'
     )]
     [ValidateNotNullOrEmpty()]
     [ValidateScript({
@@ -109,23 +108,23 @@ param (
                 throw "Invalid .ics file: $_"
             }
             if ($_.Count -gt 4) {
-                throw "The maximum number of weeks is 4. (Limit by WebUntis API)"
+                throw 'The maximum number of weeks is 4. (Limit by WebUntis API)'
             }
             $true
         })]
     [string]$appendToPreviousICSat,
     [Parameter(
-        ParameterSetName = "OutputControl",
-        HelpMessage = "Split the timetable data into separate ICS files for each course."
+        ParameterSetName = 'OutputControl',
+        HelpMessage = 'Split the timetable data into separate ICS files for each course.'
         #Mandatory = {$splitByOverride}
     )]
     [switch]$splitByCourse,
     [Parameter(
-        ParameterSetName = "OutputControl",
-        HelpMessage = "Split only by courses defined in overrideSummaries and misc. classes."
+        ParameterSetName = 'OutputControl',
+        HelpMessage = 'Split only by courses defined in overrideSummaries and misc. classes.'
     )]
     [switch]$splitByOverrides,
-    [Parameter(ParameterSetName = "OutputControl")]
+    [Parameter(ParameterSetName = 'OutputControl')]
     [switch]$outAllFormats,
     [ValidateNotNullOrEmpty()]
     [string]$cookie,
@@ -134,7 +133,7 @@ param (
 )
 
 if ($splitBySummaries -and -not $overrideSummaries) {
-    throw "The parameter splitBySummaries requires the parameter overrideSummaries to be set."
+    throw 'The parameter splitBySummaries requires the parameter overrideSummaries to be set.'
 }
 if ($outAllFormats) {
     $splitByCourse = $true
@@ -160,8 +159,7 @@ function Get-SingleElement {
 
         if ($elements.Length -eq 0) {
             throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
-        }
-        elseif ($elements.Length -gt 1) {
+        } elseif ($elements.Length -gt 1) {
             throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
         }
 
@@ -176,34 +174,34 @@ function Get-WeekStartDate($date) {
 }
 
 $headers = @{
-    "authority"                 = "$baseUrl"
-    "accept"                    = "application/json"
-    "accept-encoding"           = "gzip, deflate, br, zstd"
-    "accept-language"           = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
-    "cache-control"             = "max-age=0"
-    "dnt"                       = "1"
-    "pragma"                    = "no-cache"
-    "priority"                  = "u=0, i"
-    "sec-ch-ua"                 = "`"Google Chrome`";v=`"131`", `"Chromium`";v=`"131`", `"Not_A Brand`";v=`"24`""
-    "sec-ch-ua-mobile"          = "?0"
-    "sec-ch-ua-platform"        = "`"Windows`""
-    "sec-fetch-dest"            = "document"
-    "sec-fetch-mode"            = "navigate"
-    "sec-fetch-site"            = "none"
-    "sec-fetch-user"            = "?1"
-    "upgrade-insecure-requests" = "1"
+    'authority'                 = "$baseUrl"
+    'accept'                    = 'application/json'
+    'accept-encoding'           = 'gzip, deflate, br, zstd'
+    'accept-language'           = 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7'
+    'cache-control'             = 'max-age=0'
+    'dnt'                       = '1'
+    'pragma'                    = 'no-cache'
+    'priority'                  = 'u=0, i'
+    'sec-ch-ua'                 = "`"Google Chrome`";v=`"131`", `"Chromium`";v=`"131`", `"Not_A Brand`";v=`"24`""
+    'sec-ch-ua-mobile'          = '?0'
+    'sec-ch-ua-platform'        = "`"Windows`""
+    'sec-fetch-dest'            = 'document'
+    'sec-fetch-mode'            = 'navigate'
+    'sec-fetch-site'            = 'none'
+    'sec-fetch-user'            = '?1'
+    'upgrade-insecure-requests' = '1'
 }
 
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-$session.Cookies.Add((New-Object System.Net.Cookie("schoolname", "`"$cookie`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("Tenant-Id", "`"$tenantId`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("schoolname", "`"$cookie==`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("Tenant-Id", "`"$tenantId`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("schoolname", "`"$cookie==`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("Tenant-Id", "`"$tenantId`"", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("traceId", "9de4710537aa097594b039ee3a591cfc22a6dd99", "/", "$baseUrl")))
-$session.Cookies.Add((New-Object System.Net.Cookie("JSESSIONID", "B9ED9B2D36BE7D25A7A9EF21E8144D3F", "/", "$baseUrl")))
+$session.UserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+$session.Cookies.Add((New-Object System.Net.Cookie('schoolname', "`"$cookie`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('Tenant-Id', "`"$tenantId`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('schoolname', "`"$cookie==`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('Tenant-Id', "`"$tenantId`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('schoolname', "`"$cookie==`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('Tenant-Id', "`"$tenantId`"", '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('traceId', '9de4710537aa097594b039ee3a591cfc22a6dd99', '/', "$baseUrl")))
+$session.Cookies.Add((New-Object System.Net.Cookie('JSESSIONID', 'B9ED9B2D36BE7D25A7A9EF21E8144D3F', '/', "$baseUrl")))
 
 $periods = [System.Collections.Generic.List[PeriodEntry]]::new()
 $courses = [System.Collections.Generic.List[Course]]::new()
@@ -215,9 +213,9 @@ $isDaylightSavingTime = (Get-Date).IsDaylightSavingTime()
 
 foreach ($date in $dates) {
 
-    Write-Verbose "Getting Data for week of $($date.ToString("yyyy-MM-dd"))"
+    Write-Verbose "Getting Data for week of $($date.ToString('yyyy-MM-dd'))"
 
-    $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString("yyyy-MM-dd"))&formatId=14"
+    $url = "https://$baseUrl/WebUntis/api/public/timetable/weekly/data?elementType=$elementType&elementId=$elementId&date=$($date.ToString('yyyy-MM-dd'))&formatId=14"
 
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
     $object = $response | ConvertFrom-Json -ErrorAction Stop
@@ -263,16 +261,14 @@ foreach ($date in $dates) {
             try {
                 $element = $_
                 $periods.Add([PeriodEntry]::new($_, $rooms, $courses)) 
-            }
-            catch {
+            } catch {
                 #[FormatException] {
                 Write-Error ($element | Format-List | Out-String)
                 throw
             }
         }
-    }
-    catch [FormatException] {
-        Write-Error "Invalid Response regarding datetime format:"
+    } catch [FormatException] {
+        Write-Error 'Invalid Response regarding datetime format:'
         throw
         exit 1
     }
@@ -312,14 +308,14 @@ if (-not $dontCreateMultiDayEvents) {
         # Create a new JSON object with necessary properties
         $newJsonObject = [PSCustomObject]@{
             id         = $id
-            date       = $firstPeriod.startTime.Date.ToString("yyyyMMdd")
-            startTime  = $firstPeriod.startTime.ToString("hhmm")
+            date       = $firstPeriod.startTime.Date.ToString('yyyyMMdd')
+            startTime  = $firstPeriod.startTime.ToString('hhmm')
             endTime    = $lastPeriod.endTime
-            location   = ""
+            location   = ''
             summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
-            substText  = "for setting longer notifications after some weeks of absence"
-            lessonCode = "SUMMARY"
-            cellstate  = "ADDITIONAL"
+            substText  = 'for setting longer notifications after some weeks of absence'
+            lessonCode = 'SUMMARY'
+            cellstate  = 'ADDITIONAL'
         }
 
         # Create the new PeriodEntry
@@ -350,15 +346,13 @@ if ($appendToPreviousICSat) {
     foreach ($entry in $existingEntries) {
         $previousIcsEvent = [IcsEvent]::new($entry)
         $previousPeriod = [PeriodEntry]::new($previousIcsEvent, $rooms, $courses)
-        if ($previousIcsEvent.Category -ne "SUMMARY") {
+        if ($previousIcsEvent.Category -ne 'SUMMARY') {
             if ($periods.where({ $_.ID -eq $previousPeriod.ID }).Count -lt 1) {
                 $existingPeriods.Add($previousPeriod)
-            }
-            else {
+            } else {
                 Write-Verbose "Skipping existing entry $($previousPeriod.ID) ($($previousPeriod.StartTime) - $($previousPeriod.EndTime))"
             }
-        }
-        else { Write-Verbose "Skipping SUMMARY entry $($previousPeriod.StartTime) - $($previousPeriod.EndTime)" }
+        } else { Write-Verbose "Skipping SUMMARY entry $($previousPeriod.StartTime) - $($previousPeriod.EndTime)" }
     }
     $periods = ($existingPeriods + $periods)
 }
@@ -367,34 +361,29 @@ if ($splitByCourse -and -not $splitByOverride) {
     $tmpPeriods = $periods
     $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) {
             $_.course.course.name 
-        }
-        else { 
+        } else { 
             $_.lessonCode
         } }
     if ($outAllFormats) {
-        $periods += ($tmpPeriods | Group-Object -Property { "All" })
+        $periods += ($tmpPeriods | Group-Object -Property { 'All' })
     }
-}
-elseif ($splitByOverride) {
+} elseif ($splitByOverride) {
     $tmpPeriods = $periods
     $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) { 
             Write-Verbose "Checking for override: $($_.course.course.name) $($overrideSummaries.Keys -contains $_.course.course.name)"
             if ($overrideSummaries.Keys -contains $_.course.course.name) {
-            ($overrideSummaries[$_.course.course.name] -split ',')[0]
+                ($overrideSummaries[$_.course.course.name] -split ',')[0]
+            } else {
+                'Misc'
             }
-            else {
-                "Misc"
-            }
-        }
-        else {
+        } else {
             $_.lessonCode
         } }
     if ($outAllFormats) {
-        $periods += ($tmpPeriods | Group-Object -Property { "All" })
+        $periods += ($tmpPeriods | Group-Object -Property { 'All' })
     }
-}
-else {
-    $periods = $periods | Group-Object -Property { "All" }
+} else {
+    $periods = $periods | Group-Object -Property { 'All' }
 }
 
 foreach ($group in $periods) {
@@ -416,9 +405,9 @@ foreach ($group in $periods) {
     }
     # Use Select-Object to reorder properties and add calculated properties
     $calendarEntries | Select-Object (@(
-            @{ Name = 'pre'; Expression = { if ($_.preExist) { "[X]" } else { "[ ]" } } },
-            @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } },
-            @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
+            @{ Name = 'pre'; Expression = { if ($_.preExist) { '[X]' } else { '[ ]' } } },
+            @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm') } },
+            @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm') } }
         ) + $properties + @{ 
             Name       = 'DescriptionF'; 
             Expression = {
@@ -467,31 +456,26 @@ END:VCALENDAR
         if ($OutputFilePath) {
             # Write the .ics content to a file
             if ($splitByCourse) {
-                if ($group.Name -ne "All") {
+                if ($group.Name -ne 'All') {
                     $OutputPath = $OutputFilePath.Insert($OutputFilePath.LastIndexOf('.'), "_$($group.Name -replace '[^a-zA-Z0-9]', '_')")
-                }
-                else {
+                } else {
                     $OutputPath = $OutputFilePath
                 }
-            }
-            else {
+            } else {
                 $OutputPath = $OutputFilePath
             }
             Set-Content -Path $OutputPath -Value $icsContent
             Write-Output "ICS file created at $((Get-Item -Path $OutputPath).FullName)"
-        }
-        else {
+        } else {
             # for writing the .ics content to a variable
             Write-Output $icsContent
             if (-not $splitByCourse) {
                 return $icsContent
-            }
-            else {
+            } else {
                 # TODO: return after all period groups
             }
         }
-    }
-    catch {
+    } catch {
         Write-Error "An error occurred while creating the ICS file: $_"
         throw
     }
@@ -515,12 +499,12 @@ class IcsEvent {
     IcsEvent([PeriodEntry]$period) {
         $this.preExist = $period.preExist
         $this.UID = $period.id
-        if ($period.lessonCode -ne "SUMMARY") {
-            $this.startTime = ";TZID=Europe/Berlin:" + $period.startTime.ToString("yyyyMMddTHHmmss")
-            $this.endTime = ";TZID=Europe/Berlin:" + $period.endTime.ToString("yyyyMMddTHHmmss")
+        if ($period.lessonCode -ne 'SUMMARY') {
+            $this.startTime = ';TZID=Europe/Berlin:' + $period.startTime.ToString('yyyyMMddTHHmmss')
+            $this.endTime = ';TZID=Europe/Berlin:' + $period.endTime.ToString('yyyyMMddTHHmmss')
         } else {
-            $this.startTime = ";VALUE=DATE:" + $period.startTime.ToString("yyyyMMdd")
-            $this.endTime = ";VALUE=DATE:" + $period.endTime.AddDays(1).ToString("yyyyMMdd")
+            $this.startTime = ';VALUE=DATE:' + $period.startTime.ToString('yyyyMMdd')
+            $this.endTime = ';VALUE=DATE:' + $period.endTime.AddDays(1).ToString('yyyyMMdd')
         }
         $this.location = $period.room.room.longName
         $this.summary = $period.course.course.longName
@@ -529,33 +513,33 @@ class IcsEvent {
             $this.description += "`nReschedule:`n" + $period.rescheduleInfo.ToString()
         }
         $this.status = switch ($period.cellState) {
-            "STANDARD" { "CONFIRMED" }
-            "ADDITIONAL" { "TENTATIVE" }
-            "CANCEL" { "CANCELLED" }
-            default { "CONFIRMED" }
+            'STANDARD' { 'CONFIRMED' }
+            'ADDITIONAL' { 'TENTATIVE' }
+            'CANCEL' { 'CANCELLED' }
+            default { 'CONFIRMED' }
         }
         $this.category = switch ($period.lessonCode) {
-            "UNTIS_ADDITIONAL" { "Additional" }
+            'UNTIS_ADDITIONAL' { 'Additional' }
             default { $_ }
         }
     }
 
     IcsEvent([string]$icsText) {
         if ($icsText -notmatch 'BEGIN:VEVENT' -or ($icsText -match 'BEGIN:VEVENT' -and ($icsText -match 'BEGIN:VEVENT.*BEGIN:VEVENT'))) {
-            throw "Invalid Syntax in ICS entry. Only one VEVENT element is allowed."
+            throw 'Invalid Syntax in ICS entry. Only one VEVENT element is allowed.'
         }
         if ($icsText -notmatch 'END:VEVENT' -or ($icsText -match 'END:VEVENT' -and ($icsText -match 'END:VEVENT.*END:VEVENT'))) {
-            throw "Invalid Syntax in ICS entry. Only one VEVENT element is allowed."
+            throw 'Invalid Syntax in ICS entry. Only one VEVENT element is allowed.'
         }
         $this.preExist = $true
-        if ($icsText -match 'UID:(.*)') { $this.UID = $matches[1].Trim() } else { throw "UID not found in ICS entry." }
-        if ($icsText -match 'DTSTART;(?:TZID=.*|VALUE=DATE):(.*)') { $this.StartTime = $matches[1].Trim() } else { throw "StartTime not found in ICS entry." }
-        if ($icsText -match 'DTEND;(?:TZID=.*|VALUE=DATE):(.*)') { $this.EndTime = $matches[1].Trim() } else { throw "EndTime not found in ICS entry." }
-        if ($icsText -match 'LOCATION:(.*)') { $this.Location = $matches[1].Trim() } else { throw "Location not found in ICS entry." }
-        if ($icsText -match 'SUMMARY:(.*)') { $this.Summary = $matches[1].Trim() } else { throw "Summary not found in ICS entry." }
-        if ($icsText -match 'DESCRIPTION:(.*)') { $this.Description = $matches[1].Trim() } else { throw "Description not found in ICS entry." }
-        if ($icsText -match 'STATUS:(.*)') { $this.Status = $matches[1].Trim() } else { throw "Status not found in ICS entry." }
-        if ($icsText -match 'CATEGORIES:(.*)') { $this.Category = $matches[1].Trim() } else { throw "Category not found in ICS entry." }
+        if ($icsText -match 'UID:(.*)') { $this.UID = $matches[1].Trim() } else { throw 'UID not found in ICS entry.' }
+        if ($icsText -match 'DTSTART;(?:TZID=.*|VALUE=DATE):(.*)') { $this.StartTime = $matches[1].Trim() } else { throw 'StartTime not found in ICS entry.' }
+        if ($icsText -match 'DTEND;(?:TZID=.*|VALUE=DATE):(.*)') { $this.EndTime = $matches[1].Trim() } else { throw 'EndTime not found in ICS entry.' }
+        if ($icsText -match 'LOCATION:(.*)') { $this.Location = $matches[1].Trim() } else { throw 'Location not found in ICS entry.' }
+        if ($icsText -match 'SUMMARY:(.*)') { $this.Summary = $matches[1].Trim() } else { throw 'Summary not found in ICS entry.' }
+        if ($icsText -match 'DESCRIPTION:(.*)') { $this.Description = $matches[1].Trim() } else { throw 'Description not found in ICS entry.' }
+        if ($icsText -match 'STATUS:(.*)') { $this.Status = $matches[1].Trim() } else { throw 'Status not found in ICS entry.' }
+        if ($icsText -match 'CATEGORIES:(.*)') { $this.Category = $matches[1].Trim() } else { throw 'Category not found in ICS entry.' }
     }
 
     [string] ToIcsEntry() {
@@ -585,8 +569,8 @@ class rescheduleInfo {
     }
 
     rescheduleInfo([PSCustomObject]$jsonObject) {
-        $this.startTime = [datetime]::ParseExact($jsonObject.date.ToString(), "yyyyMMdd", $null).Add([timespan]::ParseExact($jsonObject.startTime.ToString().PadLeft(4, '0'), "hhmm", $null))
-        $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), "hhmm", $null))
+        $this.startTime = [datetime]::ParseExact($jsonObject.date.ToString(), 'yyyyMMdd', $null).Add([timespan]::ParseExact($jsonObject.startTime.ToString().PadLeft(4, '0'), 'hhmm', $null))
+        $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), 'hhmm', $null))
         $this.isSource = $jsonObject.isSource
     }
 
@@ -637,12 +621,11 @@ class PeriodEntry {
         $this.periodInfo = $jsonObject.periodInfo
         $this.periodAttachments = $jsonObject.periodAttachments
         $this.substText = $jsonObject.substText
-        $this.startTime = [datetime]::ParseExact($jsonObject.date.ToString(), "yyyyMMdd", $null).Add([timespan]::ParseExact($jsonObject.startTime.ToString().PadLeft(4, '0'), "hhmm", $null))
+        $this.startTime = [datetime]::ParseExact($jsonObject.date.ToString(), 'yyyyMMdd', $null).Add([timespan]::ParseExact($jsonObject.startTime.ToString().PadLeft(4, '0'), 'hhmm', $null))
         if ($jsonObject.endTime -is [DateTime]) {
             $this.endTime = $jsonObject.endTime
-        }
-        else {
-            $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), "hhmm", $null))
+        } else {
+            $this.endTime = $this.date().Add([timespan]::ParseExact($jsonObject.endTime.ToString().PadLeft(4, '0'), 'hhmm', $null))
         }
         $this.room = [RoomEntry]::new(($jsonObject.elements | Where-Object { $_.type -eq 4 } | Get-SingleElement), $rooms)
         $this.course = [CourseEntry]::new(($jsonObject.elements | Where-Object { $_.type -eq 3 } | Get-SingleElement), $courses)
@@ -655,8 +638,7 @@ class PeriodEntry {
         $this.isEvent = $jsonObject.is.event
         if ($null -ne $jsonObject.rescheduleInfo) {
             $this.rescheduleInfo = [rescheduleInfo]::new($jsonObject.rescheduleInfo)
-        }
-        else {
+        } else {
             $this.rescheduleInfo = $null
         }
         $this.roomCapacity = $jsonObject.roomCapacity
@@ -670,11 +652,11 @@ class PeriodEntry {
         $this.substText = $icsEvent.Description
 
         try {
-            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMddTHHmmss", $null)
-            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMddTHHmmss", $null)
+            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, 'yyyyMMddTHHmmss', $null)
+            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, 'yyyyMMddTHHmmss', $null)
         } catch {
-            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMdd", $null)
-            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMdd", $null)
+            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, 'yyyyMMdd', $null)
+            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, 'yyyyMMdd', $null)
         }
         
         #[datetime]::ParseExact($icsEvent.StartTime, "yyyyMMdd", $null)
@@ -716,7 +698,7 @@ class Room {
 
     Room([PeriodTableEntry]$legende) {
         if ($legende.type -ne 4) {
-            throw [System.ArgumentException]::new("The provided object is not a room.")
+            throw [System.ArgumentException]::new('The provided object is not a room.')
         }
         $this.id = $legende.id
         $this.name = $legende.name
@@ -752,7 +734,7 @@ class Course {
 
     Course([PeriodTableEntry]$legende) {
         if ($legende.type -ne 3) {
-            throw [System.ArgumentException]::new("The provided object is not a course.")
+            throw [System.ArgumentException]::new('The provided object is not a course.')
         }
         $this.id = $legende.id
         $this.name = $legende.name
