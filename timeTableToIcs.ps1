@@ -515,8 +515,13 @@ class IcsEvent {
     IcsEvent([PeriodEntry]$period) {
         $this.preExist = $period.preExist
         $this.UID = $period.id
-        $this.startTime = $period.startTime.ToString("yyyyMMddTHHmmss")
-        $this.endTime = $period.endTime.ToString("yyyyMMddTHHmmss")
+        if ($period.lessonCode -ne "SUMMARY") {
+            $this.startTime = ";TZID=Europe/Berlin:" + $period.startTime.ToString("yyyyMMddTHHmmss")
+            $this.endTime = ";TZID=Europe/Berlin:" + $period.endTime.ToString("yyyyMMddTHHmmss")
+        } else {
+            $this.startTime = ";VALUE=DATE:" + $period.startTime.ToString("yyyyMMdd")
+            $this.endTime = ";VALUE=DATE:" + $period.endTime.AddDays(1).ToString("yyyyMMdd")
+        }
         $this.location = $period.room.room.longName
         $this.summary = $period.course.course.longName
         $this.description = $period.substText
@@ -544,8 +549,8 @@ class IcsEvent {
         }
         $this.preExist = $true
         if ($icsText -match 'UID:(.*)') { $this.UID = $matches[1].Trim() } else { throw "UID not found in ICS entry." }
-        if ($icsText -match 'DTSTART;TZID=.*:(.*)') { $this.StartTime = $matches[1].Trim() } else { throw "StartTime not found in ICS entry." }
-        if ($icsText -match 'DTEND;TZID=.*:(.*)') { $this.EndTime = $matches[1].Trim() } else { throw "EndTime not found in ICS entry." }
+        if ($icsText -match 'DTSTART;(?:TZID=.*|VALUE=DATE):(.*)') { $this.StartTime = $matches[1].Trim() } else { throw "StartTime not found in ICS entry." }
+        if ($icsText -match 'DTEND;(?:TZID=.*|VALUE=DATE):(.*)') { $this.EndTime = $matches[1].Trim() } else { throw "EndTime not found in ICS entry." }
         if ($icsText -match 'LOCATION:(.*)') { $this.Location = $matches[1].Trim() } else { throw "Location not found in ICS entry." }
         if ($icsText -match 'SUMMARY:(.*)') { $this.Summary = $matches[1].Trim() } else { throw "Summary not found in ICS entry." }
         if ($icsText -match 'DESCRIPTION:(.*)') { $this.Description = $matches[1].Trim() } else { throw "Description not found in ICS entry." }
@@ -557,8 +562,8 @@ class IcsEvent {
         return @"
 BEGIN:VEVENT
 UID:$($this.UID)
-DTSTART;TZID=Europe/Berlin:$($this.StartTime)
-DTEND;TZID=Europe/Berlin:$($this.EndTime)
+DTSTART$($this.StartTime)
+DTEND$($this.EndTime)
 LOCATION:$($this.Location)
 SUMMARY:$($this.Summary)
 DESCRIPTION:$($this.Description)
@@ -663,8 +668,18 @@ class PeriodEntry {
         $this.id = $icsEvent.UID
         $this.lessonCode = $icsEvent.Category
         $this.substText = $icsEvent.Description
-        $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMddTHHmmss", $null)
-        $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMddTHHmmss", $null)
+
+        try {
+            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMddTHHmmss", $null)
+            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMddTHHmmss", $null)
+        } catch {
+            $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMdd", $null)
+            $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMdd", $null)
+        }
+        
+        #[datetime]::ParseExact($icsEvent.StartTime, "yyyyMMdd", $null)
+        #[datetime]::ParseExact($icsEvent.StartTime, @("yyyyMMddTHHmmss", "yyyyMMdd
+
         #$this.room = 
         #$this.course = 
     }
