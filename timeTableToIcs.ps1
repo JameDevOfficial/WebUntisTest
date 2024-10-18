@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Converts a WebUntis timetable to an ICS calendar file.
+    Gets and converts a WebUntis timetable to an ICS calendar file.
 
 .DESCRIPTION
-    This script retrieves timetable data from the WebUntis API and converts it into an ICS calendar file format. 
+    This script retrieves timetable data from the WebUntis API and converts it into a subscribably ICS calendar file format. 
     It allows specifying a date range for the timetable data.
 
 .PARAMETER baseUrl
@@ -22,6 +22,18 @@
 .PARAMETER OutputFilePath
     The file path where the ICS file will be saved. The default is "calendar.ics".
 
+.PARAMETER dontCreateMultiDayEvents
+    If set, generating "summary" multi-day events will be skipped.
+
+.PARAMETER overrideSummaries
+    A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.
+
+.PARAMETER appendToPreviousICSat
+    The path to an existing ICS file to which the new timetable data should be appended.
+
+.PARAMETER splitByCourse
+    If set, the timetable data will be split into separate ICS files for each course.
+
 .PARAMETER cookie
     The cookie value for the WebUntis session.
 
@@ -32,9 +44,9 @@
     .\timeTableToIcs.ps1 -baseUrl "your.webuntis.url" -elementType 1 -elementId 12345 -dates "2023-01-01", "2023-01-08" -OutputFilePath "mycalendar.ics" -cookie "your_cookie" -tenantId "your_tenant_id"
 
 .NOTES
-    Author: Markus Noack
+    Author: Chaos_02
     Date: 2024-09-28
-    Version: 1.0
+    Version: 1.5
 #>
 
 param (
@@ -59,10 +71,28 @@ param (
         })]
     [System.Object[]]$dates = @( (@(-7, 0, 7, 14) | ForEach-Object { (Get-Date).AddDays($_) }) ),
     [switch]$dontCreateMultiDayEvents,
+    [Parameter(
+        Position=0,
+        ValueFromPipeline=$true,
+        ValueFromPipelineByPropertyName=$true,
+        HelpMessage = "Output file path."
+    )]
+    [Alias("PSPath")]
     [ValidateNotNullOrEmpty()]
+    [ValidateScript({ $_.EndsWith(".ics") })] 
     [string]$OutputFilePath = "calendar.ics",
+    # Specifies a path to one or more locations.
     [ValidateNotNullOrEmpty()]
+    [Parameter(
+        ValueFromPipelineByPropertyName=$true,
+        HelpMessage = "A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name."
+        #Mandatory = {$splitByOverride}
+    )]
     [hashtable]$overrideSummaries,
+    [Parameter(
+        ValueFromPipelineByPropertyName=$true,
+        HelpMessage = "Path to an existing ICS file to which the new timetable data should be appended."
+    )]
     [ValidateNotNullOrEmpty()]
     [ValidateScript({
         if (-not (Test-Path $_)) {
@@ -75,11 +105,28 @@ param (
         $true
     })]
     [string]$appendToPreviousICSat,
+    [Parameter(
+        ParameterSetName = "OutputControl",
+        HelpMessage = "Split the timetable data into separate ICS files for each course."
+        #Mandatory = {$splitByOverride}
+    )]
+    [switch]$splitByCourse,
+    [Parameter(
+        ParameterSetName = "OutputControl",
+        HelpMessage = "Split only by courses defined in overrideSummaries and misc. classes."
+    )]
+    [switch]$splitByOverrides,
+    [Parameter(ParameterSetName = "OutputControl")]
+    [switch]$outAllFormats,
     [ValidateNotNullOrEmpty()]
     [string]$cookie,
     [ValidateNotNullOrEmpty()]
     [string]$tenantId
 )
+
+if ($outAllFormats) {
+    $splitByCourse = $true
+}
 
 $datesCount = 0
 # Convert any string inputs to DateTime objects
@@ -273,37 +320,71 @@ if (-not $dontCreateMultiDayEvents) {
     $periods = ($multiDayEvents + $periods)
 }
 
-$calendarEntries = [System.Collections.Generic.List[IcsEvent]]::new()
-
-# Iterate over each period and create calendar entries
-foreach ($period in $periods) {
+foreach ($period in $group.Group) {
     if ($isDaylightSavingTime) {
         $period.startTime = $period.startTime.AddHours(-1)
         $period.endTime = $period.endTime.AddHours(-1)
     }
-
-    $calendarEntries.Add([IcsEvent]::new($period))
 }
 
-$existingIcsEvents = [System.Collections.Generic.List[IcsEvent]]::new()
+$existingPeriods = [System.Collections.Generic.List[PeriodEntry]]::new()
 
 if ($appendToPreviousICSat) {
-    Write-Host "Appending to previous ICS file $appendToPreviousICSat"
+    Write-Information "Appending to previous ICS file $appendToPreviousICSat"
     $content = Get-Content $appendToPreviousICSat -Raw
     $veventPattern = '(?s)BEGIN:VEVENT.*?END:VEVENT'
     $existingEntries = [regex]::Matches($content, $veventPattern) | ForEach-Object { $_.Value }
     
     foreach ($entry in $existingEntries) {
         $previousIcsEvent = [IcsEvent]::new($entry)
+        $previousPeriod = [PeriodEntry]::new($previousIcsEvent, $rooms, $courses)
         if ($previousIcsEvent.Category -ne "SUMMARY") {
-            if ($calendarEntries.where({ $_.UID -eq $previousIcsEvent.UID }).Count -lt 1) {
-                $existingIcsEvents.Add($previousIcsEvent)
+            if ($periods.where({ $_.ID -eq $previousPeriod.ID }).Count -lt 1) {
+                $existingPeriods.Add($previousPeriod)
             } else {
-                Write-Verbose "Skipping existing entry $($previousIcsEvent.UID)"
+                Write-Verbose "Skipping existing entry $($previousPeriod.ID) ($($previousPeriod.StartTime) - $($previousPeriod.EndTime))"
             }
-        } else { Write-Verbose "Skipping SUMMARY entry $($previousIcsEvent.StartTime) - $($previousIcsEvent.EndTime)" }
+        } else { Write-Verbose "Skipping SUMMARY entry $($previousPeriod.StartTime) - $($previousPeriod.EndTime)" }
     }
-    $calendarEntries = ($existingIcsEvents + $calendarEntries)
+    $periods = ($existingPeriods + $periods)
+}
+
+if ($splitByCourse -and -not $splitByOverride) {
+    $tmpPeriods = $periods
+    $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) {
+        $_.course.course.name 
+    } else { 
+        $_.lessonCode
+    }}
+    if ($outAllFormats) {
+        $periods += ($tmpPeriods | Group-Object -Property { "All" })
+    }
+} elseif ($splitByOverride) {
+    $tmpPeriods = $periods
+    $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) { 
+        Write-Verbose "Checking for override: $($_.course.course.name) $($overrideSummaries.Keys -contains $_.course.course.name)"
+        if ($overrideSummaries.Keys -contains $_.course.course.name) {
+            ($overrideSummaries[$_.course.course.name] -split ',')[0]
+        } else {
+            "Misc"
+        }
+    } else {
+        $_.lessonCode
+    }}
+    if ($outAllFormats) {
+        $periods += ($tmpPeriods | Group-Object -Property { "All" })
+    }
+} else {
+    $periods = $periods | Group-Object -Property { "All" }
+}
+
+foreach ($group in $periods) {
+    
+$calendarEntries = [System.Collections.Generic.List[IcsEvent]]::new()
+
+# Iterate over each period and create calendar entries
+foreach ($period in $group.Group) {
+    $calendarEntries.Add([IcsEvent]::new($period))
 }
 
 # Get all properties except StartTime and EndTime
@@ -311,6 +392,9 @@ $properties = $calendarEntries | Get-Member -MemberType Properties | Where-Objec
     $_.Name -ne 'StartTime' -and $_.Name -ne 'EndTime' -and $_.Name -ne 'Description' -and $_.Name -ne 'UID' -and $_.Name -ne 'preExist'
 } | Select-Object -ExpandProperty Name
 
+if ($splitByCourse) {
+    Write-Host "ICS content for $($group.Name):`n========================"
+}
 # Use Select-Object to reorder properties and add calculated properties
 $calendarEntries | Select-Object (@(
         @{ Name = 'pre'; Expression = { if ($_.preExist) {"[X]"} else {"[ ]"} } },
@@ -318,27 +402,14 @@ $calendarEntries | Select-Object (@(
         @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, "yyyyMMddTHHmmss", $null).ToString("dd.MM.yy HH:mm") } }
     ) + $properties + @{ 
         Name       = 'DescriptionF'; 
-        Expression = { 
-            $parts = $_.Description -split ';'
-            $firstPart = $parts[0].Trim()
-            $secondPart = if ($parts.Count -gt 1) { $parts[1].Trim() } else { "" }
-            
-            if ($secondPart -ne "") {
-                $sourceIndex = $secondPart.IndexOf("source:")
-                if ($sourceIndex -ne -1) {
-                    $source = $secondPart.Substring($sourceIndex + 7).Trim()
-                    "$firstPart; source: $source"
-                }
-                else {
-                    $firstPart
-                }
-            }
-            else {
-                $firstPart
-            }
+        Expression = {
+            $_.Description -replace '`n', ';; '
         } 
     }
-) | Format-Table -AutoSize
+) | Format-Table -Wrap -AutoSize | Out-String -Width 4096
+if ($splitByCourse) {
+    Write-Host "`n"
+}
 
 
 $IcsEntries = [System.Collections.Generic.List[string]]::new()
@@ -352,7 +423,7 @@ $icsContent = @"
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Chaos_02//WebUntisToIcs//EN
-X-WR-CALNAME:$($class.displayname)
+X-WR-CALNAME:$(if (-not $splitByCourse) {$class.displayname} else {$class.displayname + " - $($group.Name)"})
 BEGIN:VTIMEZONE
 TZID:Europe/Berlin
 BEGIN:STANDARD
@@ -376,19 +447,34 @@ END:VCALENDAR
 try {
     if ($OutputFilePath) {
         # Write the .ics content to a file
-        Set-Content -Path $OutputFilePath -Value $icsContent
-        Write-Output "ICS file created at $((Get-Item -Path $OutputFilePath).FullName)"
+        if ($splitByCourse) {
+            if ($group.Name -ne "All") {
+                $OutputPath = $OutputFilePath.Insert($OutputFilePath.LastIndexOf('.'), "_$($group.Name -replace '[^a-zA-Z0-9]', '_')")
+            } else {
+                $OutputPath = $OutputFilePath
+            }
+        } else {
+            $OutputPath = $OutputFilePath
+        }
+        Set-Content -Path $OutputPath -Value $icsContent
+        Write-Output "ICS file created at $((Get-Item -Path $OutputPath).FullName)"
     }
     else {
-        # Write the .ics content to a variable
-        $icsVariable = $icsContent
-        Write-Output $icsVariable
-        return $icsVariable
+        # for writing the .ics content to a variable
+        Write-Output $icsContent
+        if (-not $splitByCourse) {
+            return $icsContent
+        } else {
+            # TODO: return after all period groups
+        }
     }
 }
 catch {
     Write-Error "An error occurred while creating the ICS file: $_"
     throw
+}
+
+
 }
 
 ####### Class definitions #######
@@ -405,6 +491,7 @@ class IcsEvent {
     [bool]$preExist = $false
 
     IcsEvent([PeriodEntry]$period) {
+        $this.preExist = $period.preExist
         $this.UID = $period.id
         $this.startTime = $period.startTime.ToString("yyyyMMddTHHmmss")
         $this.endTime = $period.endTime.ToString("yyyyMMddTHHmmss")
@@ -501,10 +588,12 @@ class PeriodEntry {
     [string]$cellState
     [int]$priority
     [bool]$isStandard
+    [bool]$isCancelled
     [bool]$isEvent
     [rescheduleInfo]$rescheduleInfo
     [int]$roomCapacity
     [int]$studentCount
+    [bool]$preExist = $false
 
     [datetime] date() {
         return $this.startTime.Date
@@ -533,6 +622,7 @@ class PeriodEntry {
         $this.code = $jsonObject.code
         $this.cellState = $jsonObject.cellState
         $this.priority = $jsonObject.priority
+        $this.isCancelled = $jsonObject.is.cancelled
         $this.isStandard = $jsonObject.is.standard
         $this.isEvent = $jsonObject.is.event
         if ($null -ne $jsonObject.rescheduleInfo) {
@@ -543,6 +633,17 @@ class PeriodEntry {
         }
         $this.roomCapacity = $jsonObject.roomCapacity
         $this.studentCount = $jsonObject.studentCount
+    }
+
+    PeriodEntry([IcsEvent]$icsEvent, [System.Collections.Generic.List[Room]]$rooms, [System.Collections.Generic.List[Course]]$courses) {
+        $this.preExist = $true
+        $this.id = $icsEvent.UID
+        $this.lessonCode = $icsEvent.Category
+        $this.substText = $icsEvent.Description
+        $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, "yyyyMMddTHHmmss", $null)
+        $this.endTime = [datetime]::ParseExact($icsEvent.EndTime, "yyyyMMddTHHmmss", $null)
+        #$this.room = 
+        #$this.course = 
     }
 
     [string] ToString() {

@@ -63,9 +63,9 @@ jobs:
         run: |
           if (Test-Path "./previous_calendar.ics/calendar.ics") {
             Write-Host ::notice::Appending to the previous calendar.
-            ./timeTableToIcs.ps1 -appendToPreviousICSat "./previous_calendar.ics/calendar.ics" -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+            ./timeTableToIcs.ps1 -appendToPreviousICSat "./previous_calendar.ics/calendar.ics" -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           } else {
-            ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
+            ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           }
         shell: pwsh
 
@@ -87,11 +87,10 @@ jobs:
               Write-Host "::notice::Changes detected in script output."
               echo "changes_detected=true" >> $env:GITHUB_OUTPUT
             } else {
-              Write-Host "No differences found in script output."
+              Write-Host "::notice::No differences found in script output."
               echo "changes_detected=false" >> $env:GITHUB_OUTPUT
             }
           } else {
-            Write-Host "No previous script output found. Assuming changes."
             Write-Host "::notice::No previous script output found. Assuming changes."
             echo "changes_detected=true" >> $env:GITHUB_OUTPUT
           }
@@ -109,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: calendar
-          path: .out/calendar.ics
+          path: .out/
 
   deploy:
     needs: update-calendar
