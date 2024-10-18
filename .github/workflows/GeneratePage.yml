@@ -2,15 +2,12 @@ name: Update Calendar and Deploy to GitHub Pages
 
 on:
   schedule:
-    # Runs the workflow at the specified intervals
     - cron: "0 */6 * * *"  # Every 6 hours
     - cron: "0 6 * * *"    # Run at 6:00 UTC every day
     - cron: "0 7 * * *"    # Run at 7:00 UTC every day
-
   workflow_dispatch:  # Allows manual triggering of the workflow
-
   push:
-    branches: ["main"]  # This will trigger deployment when changes are pushed to main
+    branches: ["main"]  # Triggers deployment when changes are pushed to main
 
 permissions:
   actions: read        # Allow reading of workflow run details and artifacts
@@ -23,7 +20,6 @@ jobs:
       changes_detected: ${{ steps.compare.outputs.changes_detected }}
 
     steps:
-      # Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -68,6 +64,12 @@ jobs:
             ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           }
         shell: pwsh
+      # Debugging: List files after downloading the artifact
+      - name: List Files After Generation
+        run: |
+          Write-Host "Files in .out/:"
+          Get-ChildItem ./.out/ -Recurse
+        shell: pwsh
 
       # Compare new script output with the previous script output
       - name: Compare Script Outputs
@@ -103,13 +105,16 @@ jobs:
           name: script-output
           path: script_output.txt
 
-      # Upload the new ICS as an artifact (for deployment)
-      - name: Upload ICS Artifact
+      # Upload the new calendar(s) as an artifact for deployment
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: calendar
-          path: .out/
-
+          path: ./.out/*
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: true
+          
   deploy:
     needs: update-calendar
     runs-on: ubuntu-latest
@@ -129,6 +134,19 @@ jobs:
         with:
           name: calendar
           path: '.out'
+
+      # Generate index.html with links to all files in .out directory
+      - name: Generate index.html
+        run: |
+          echo "<html><body><h1>Generated Files</h1><ul>" > .out/index.html
+          for file in .out/*; do
+            fname=$(basename "$file")
+            if [ "$fname" != "index.html" ]; then
+              echo "<li><a href=\"$fname\">$fname</a></li>" >> .out/index.html
+            fi
+          done
+          echo "</ul></body></html>" >> .out/index.html
+        shell: bash
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
