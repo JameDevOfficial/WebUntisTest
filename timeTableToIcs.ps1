@@ -431,6 +431,8 @@ foreach ($group in $periods) {
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Chaos_02//WebUntisToIcs//EN
+REFRESH-INTERVAL;VALUE=DURATION:PT3H
+X-PUBLISHED-TTL:PT12H
 X-WR-CALNAME:$(if (-not $splitByCourse) {$class.displayname} else {$class.displayname + " - $($group.Name)"})
 BEGIN:VTIMEZONE
 TZID:Europe/Berlin
@@ -450,6 +452,7 @@ END:VTIMEZONE
 $(($IcsEntries -join "`n"))
 END:VCALENDAR
 "@
+
 
 
     try {
