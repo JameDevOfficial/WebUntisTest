@@ -96,6 +96,7 @@ jobs:
             Write-Host "::notice::No previous script output found. Assuming changes."
             echo "changes_detected=true" >> $env:GITHUB_OUTPUT
           }
+          echo "changes_detected=true" >> $env:GITHUB_OUTPUT # TODO: fix comparison
         shell: pwsh
 
       # Upload the new script output as an artifact for future comparison
