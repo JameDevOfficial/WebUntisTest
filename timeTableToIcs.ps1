@@ -146,24 +146,19 @@ $dates = $dates | ForEach-Object {
 
 function Get-SingleElement {
     param (
-        [Parameter(ValueFromPipeline = $true)]#, ValueFromPipelineByPropertyName = $true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [ValidateNotNullOrEmpty()]
         [System.Object[]]$collection
     )
 
     process {
-        $elements = @()
-        foreach ($item in $collection) {
-            # Unify for generic access
-            $elements += $item
-        }
-
-        if ($elements.Length -eq 0) {
+        if ($collection.Length -eq 0) {
             throw [System.InvalidOperationException]::new("No elements match the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
-        } elseif ($elements.Length -gt 1) {
+        } elseif ($collection.Length -gt 1) {
             throw [System.InvalidOperationException]::new("More than one element matches the predicate. Call stack: $((Get-PSCallStack | Out-String).Trim())")
         }
 
-        return $elements[0]
+        return $collection[0]
     }
 }
 
@@ -313,7 +308,7 @@ if (-not $dontCreateMultiDayEvents) {
             endTime    = $lastPeriod.endTime
             location   = ''
             summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
-            substText  = 'for setting longer notifications after some weeks of absence'
+            substText  = "for setting longer notifications after some weeks of absence`nRefreshed at $(Get-Date)"
             lessonCode = 'SUMMARY'
             cellstate  = 'ADDITIONAL'
         }
@@ -345,14 +340,14 @@ if ($appendToPreviousICSat) {
     
     foreach ($entry in $existingEntries) {
         $previousIcsEvent = [IcsEvent]::new($entry)
-        $previousPeriod = [PeriodEntry]::new($previousIcsEvent, $rooms, $courses)
         if ($previousIcsEvent.Category -ne 'SUMMARY') {
+            $previousPeriod = [PeriodEntry]::new($previousIcsEvent, $rooms, $courses)
             if ($periods.where({ $_.ID -eq $previousPeriod.ID }).Count -lt 1) {
                 $existingPeriods.Add($previousPeriod)
             } else {
                 Write-Verbose "Skipping existing entry $($previousPeriod.ID) ($($previousPeriod.StartTime) - $($previousPeriod.EndTime))"
             }
-        } else { Write-Verbose "Skipping SUMMARY entry $($previousPeriod.StartTime) - $($previousPeriod.EndTime)" }
+        } else { Write-Verbose "Skipping SUMMARY entry $($previousIcsEvent.StartTime) - $($previousIcsEvent.EndTime)" }
     }
     $periods = ($existingPeriods + $periods)
 }
@@ -519,6 +514,9 @@ class IcsEvent {
             'STANDARD' { 'CONFIRMED' }
             'ADDITIONAL' { 'TENTATIVE' }
             'CANCEL' { 'CANCELLED' }
+            'CONFIRMED' { $_ }
+            'TENTATIVE' { $_ }
+            'CANCELLED' { $_ }
             default { 'CONFIRMED' }
         }
         $this.category = switch ($period.lessonCode) {
@@ -651,8 +649,11 @@ class PeriodEntry {
     PeriodEntry([IcsEvent]$icsEvent, [System.Collections.Generic.List[Room]]$rooms, [System.Collections.Generic.List[Course]]$courses) {
         $this.preExist = $true
         $this.id = $icsEvent.UID
+        $this.course = [CourseEntry]::new(($courses.Where({ $_.longName -eq $icsEvent.Summary }) | Get-SingleElement))
+        $this.room = [RoomEntry]::new(($rooms.Where({ $_.longName -eq $icsEvent.Location }) | Get-SingleElement))
         $this.lessonCode = $icsEvent.Category
         $this.substText = $icsEvent.Description
+        $this.cellState = $icsEvent.Status
 
         try {
             $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, 'yyyyMMddTHHmmss', $null)
@@ -665,8 +666,6 @@ class PeriodEntry {
         #[datetime]::ParseExact($icsEvent.StartTime, "yyyyMMdd", $null)
         #[datetime]::ParseExact($icsEvent.StartTime, @("yyyyMMddTHHmmss", "yyyyMMdd
 
-        #$this.room = 
-        #$this.course = 
     }
 
     [string] ToString() {
@@ -688,6 +687,13 @@ class RoomEntry {
         $this.orgId = $jsonObject.orgId
         $this.missing = $jsonObject.missing
         $this.state = $jsonObject.state
+    }
+
+    RoomEntry([Room]$room) {
+        $this.room = $room
+        $this.orgId = $null
+        $this.missing = $null
+        $this.state = $null
     }
 }
 
@@ -724,6 +730,13 @@ class CourseEntry {
         $this.orgId = $jsonObject.orgId
         $this.missing = $jsonObject.missing
         $this.state = $jsonObject.state
+    }
+
+    CourseEntry([Course]$course) {
+        $this.course = $course
+        $this.orgId = $null
+        $this.missing = $null
+        $this.state = $null
     }
 }
 
