@@ -25,7 +25,7 @@ jobs:
 
       # Download the previous script output (if available)
       - name: Download Previous Script Output
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v6
         with:
           workflow: GeneratePage.yml  # Your workflow file name
           name: script-output         # Name of the artifact to download
@@ -34,7 +34,7 @@ jobs:
         continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
         # Download the previous script output (if available)
       - name: Download Previous ICS
-        uses: dawidd6/action-download-artifact@v2
+        uses: dawidd6/action-download-artifact@v6
         with:
           workflow: GeneratePage.yml  # Your workflow file name
           name: calendar
