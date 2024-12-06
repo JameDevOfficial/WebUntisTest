@@ -25,6 +25,9 @@
 .PARAMETER dontCreateMultiDayEvents
     If set, generating "summary" multi-day events will be skipped.
 
+.PARAMETER dontSplitOnGapDays
+    If set, multi-day events will NOT be split if there are gap days in the week
+
 .PARAMETER overrideSummaries
     A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.
 
@@ -39,6 +42,7 @@
 
 .PARAMETER outAllFormats
     If set, the timetable data will be output in all formats.
+    (Implies -splitByCourse)
 
 .PARAMETER cookie
     The cookie value for the WebUntis session.
@@ -65,9 +69,12 @@ param (
     [Parameter(Mandatory = $false)]
     [Alias('Date')]
     [ValidateScript({
+            if ($_.Count -gt 4) {
+                throw 'The maximum number of weeks is 4. (Limit by WebUntis API)'
+            }
             if ($_.GetType().Name -eq 'String') {
                 if (-not [datetime]::TryParse($_, [ref] $null)) {
-                    throw 'Invalid date format. Please provide a valid date string.'
+                    throw 'Invalid date format. Please provide a valid date string parse-able by `[datetime]::TryParse()`.'
                 }
             } elseif ($_.GetType().Name -ne 'DateTime') {
                 throw 'Invalid date format. Provide a date string or DateTime object.'
@@ -76,6 +83,8 @@ param (
         })]
     [System.Object[]]$dates = @( (@(-7, 0, 7, 14) | ForEach-Object { (Get-Date).AddDays($_) }) ),
     [switch]$dontCreateMultiDayEvents,
+    [ValidateScript({ if (($_ -and -not $dontCreateMultiDayEvents) -eq $false) {throw "Can't use together with -dontCreateMultiDayEvents"} else {$true} })]
+    [switch]$dontSplitOnGapDays,
     [Parameter(
         Position = 0,
         ValueFromPipeline = $true,
@@ -107,9 +116,6 @@ param (
             if ($content -notmatch '^BEGIN:VCALENDAR' -or $content -notmatch 'END:VCALENDAR\s*$') {
                 throw "Invalid .ics file: $_"
             }
-            if ($_.Count -gt 4) {
-                throw 'The maximum number of weeks is 4. (Limit by WebUntis API)'
-            }
             $true
         })]
     [string]$appendToPreviousICSat,
@@ -123,6 +129,7 @@ param (
         ParameterSetName = 'OutputControl',
         HelpMessage = 'Split only by courses defined in overrideSummaries and misc. classes.'
     )]
+    [ValidateScript({if ($_ -and -not $overrideSummaries) {throw 'The parameter -splitByOverrides requires the parameter overrideSummaries to be set.'} else {$true}})]
     [switch]$splitByOverrides,
     [Parameter(ParameterSetName = 'OutputControl')]
     [switch]$outAllFormats,
@@ -132,9 +139,6 @@ param (
     [string]$tenantId
 )
 
-if ($splitBySummaries -and -not $overrideSummaries) {
-    throw 'The parameter splitBySummaries requires the parameter overrideSummaries to be set.'
-}
 if ($outAllFormats) {
     $splitByCourse = $true
 }
@@ -286,38 +290,61 @@ if (-not $dontCreateMultiDayEvents) {
 
     # Process each week group
     foreach ($group in $periodsGroupedByWeek) {
+        $sortedPeriods = $group.Group # [System.Collections.Generic.List[PeriodEntry]]::new($($group.Group | Sort-Object startTime))
 
-        $firstPeriod = $group.Group[0]
-        $lastPeriod = $group.Group[-1]
 
-        $culture = [System.Globalization.CultureInfo]::CurrentCulture
-        $calendar = $culture.Calendar
-        $weekOfYear = $calendar.GetWeekOfYear($firstPeriod.startTime, $culture.DateTimeFormat.CalendarWeekRule, $culture.DateTimeFormat.FirstDayOfWeek)
+        $first = $sortedPeriods[0]
+        $sortedPeriods.remove($first)
 
-        do {
-            $id = [System.Math]::Abs([System.BitConverter]::ToInt32([System.Guid]::NewGuid().ToByteArray(), 0))
-        } while ($periods.Where({ $_.id -eq $id }).Count -ne 0)
+        $dayGroups = [System.Collections.Generic.List[System.Collections.Generic.List[PeriodEntry]]]::new()
+        $previousDate = $first.startTime.Date
 
-        
+        foreach ($period in $sortedPeriods) {
+            $currentDate = $period.startTime.Date
+            $daysDifference = ($currentDate - $previousDate).Days
+            if (((-not $dontSplitOnGapDays) -and $daysDifference -gt 1) -or $dayGroups.Count -eq 0) {
+                # Gap detected, add new group
+                $dayGroups.Add([System.Collections.Generic.List[PeriodEntry]]::new())
+            }
 
-        # Create a new JSON object with necessary properties
-        $newJsonObject = [PSCustomObject]@{
-            id         = $id
-            date       = $firstPeriod.startTime.Date.ToString('yyyyMMdd')
-            startTime  = $firstPeriod.startTime.ToString('hhmm')
-            endTime    = $lastPeriod.endTime
-            location   = ''
-            summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
-            substText  = "for setting longer notifications after some weeks of absence`nRefreshed at $(Get-Date)"
-            lessonCode = 'SUMMARY'
-            cellstate  = 'ADDITIONAL'
+            # (No gap), add to current group
+            $dayGroups[$dayGroups.Count - 1].Add($period)
+            $previousDate = $currentDate
         }
 
-        # Create the new PeriodEntry
-        $newElement = [PeriodEntry]::new($newJsonObject, $rooms, $courses)
+        $i = 0
+        foreach ($dayGroup in $dayGroups) {
+            $i++
+            $firstPeriod = $dayGroup[0]
+            $lastPeriod = $dayGroup[$dayGroups.Count - 1]
 
-        # Add the new element to the array
-        $multiDayEvents.Add($newElement)
+            $culture = [System.Globalization.CultureInfo]::CurrentCulture
+            $calendar = $culture.Calendar
+            $weekOfYear = $calendar.GetWeekOfYear($firstPeriod.startTime, $culture.DateTimeFormat.CalendarWeekRule, $culture.DateTimeFormat.FirstDayOfWeek)
+
+            if ($dayGroups.Length -gt 1) {
+                $weekOfYear = "$weekOfYear ($i/${dayGroups.Length})"
+            }
+
+            do {
+                $id = [System.Math]::Abs([System.BitConverter]::ToInt32([System.Guid]::NewGuid().ToByteArray(), 0))
+            } while ($periods.Where({ $_.id -eq $id }).Count -ne 0 -or $multiDayEvents.Where({ $_.id -eq $id }).Count -ne 0)
+
+            # Create a new JSON object with necessary properties
+            $summaryJson = [PSCustomObject]@{
+                id         = $id
+                date       = $firstPeriod.startTime.Date.ToString('yyyyMMdd')
+                startTime  = $firstPeriod.startTime.ToString('hhmm')
+                endTime    = $lastPeriod.endTime
+                location   = ''
+                summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
+                substText  = "Refreshed at $(Get-Date); For setting longer notifications after some weeks of absence`n test"
+                lessonCode = 'SUMMARY'
+                cellstate  = 'ADDITIONAL'
+            }
+            $newSummary = [PeriodEntry]::new($summaryJson, $rooms, $courses)
+            $multiDayEvents.Add($newSummary)
+        }
     }
 
     $periods = ($multiDayEvents + $periods)
