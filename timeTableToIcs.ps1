@@ -283,7 +283,7 @@ if (-not $dontCreateMultiDayEvents) {
     }
 
     # Group periods by WeekStartDate
-    $periodsGroupedByWeek = $periods | Group-Object -Property WeekStartDate
+    $periodsGroupedByWeek = $periods.Where({ $_.isCancelled -ne $true }) | Group-Object -Property WeekStartDate
 
     # Initialize an array to hold the new multi-day elements
     $multiDayEvents = [System.Collections.Generic.List[PeriodEntry]]::new()
