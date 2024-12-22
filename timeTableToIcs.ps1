@@ -276,7 +276,32 @@ foreach ($date in $dates) {
 
 $periods = $periods | Sort-Object -Property startTime
 
+if ($periods.Length -eq 0 -or $null -eq $periods) {
+    
+}
+
 if (-not $dontCreateMultiDayEvents) {
+
+    # Always create a dummy Summary event so a file exists (prevents issues with outlook)
+    if ($periods.Count -eq 0) {
+        $periods += [PeriodEntry]::new(
+            [IcsEvent]::new(
+@"
+BEGIN:VEVENT
+UID:0
+DTSTART;VALUE=DATE:$([datetime]::new(0).ToString('yyyyMMddTHHmmss'))
+DTEND;VALUE=DATE:$([datetime]::new(0).AddMinutes(1).ToString('yyyyMMddTHHmmss'))
+LOCATION:DUMMY
+SUMMARY:DUMMY
+DESCRIPTION:DUMMY
+STATUS:CANCELLED
+CATEGORIES:DUMMY
+END:VEVENT
+"@
+            ), @(), @() # Empty Rooms and Course list - don't need
+        )
+    }
+
     # Add WeekStartDate property to each period
     $periods | ForEach-Object {
         $_ | Add-Member -NotePropertyName WeekStartDate -NotePropertyValue (Get-WeekStartDate $_.startTime) -Force
@@ -337,7 +362,7 @@ if (-not $dontCreateMultiDayEvents) {
                 startTime  = $firstPeriod.startTime.ToString('hhmm')
                 endTime    = $lastPeriod.endTime
                 location   = ''
-                summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the summary...
+                summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the event summary...
                 substText  = "Refreshed at $(Get-Date); For setting longer notifications after some weeks of absence`n test"
                 lessonCode = 'SUMMARY'
                 cellstate  = 'ADDITIONAL'
@@ -350,7 +375,7 @@ if (-not $dontCreateMultiDayEvents) {
     $periods = ($multiDayEvents + $periods)
 }
 
-foreach ($period in $group.Group) {
+foreach ($period in $periods) {
     if ($isDaylightSavingTime) {
         $period.startTime = $period.startTime.AddHours(-1)
         $period.endTime = $period.endTime.AddHours(-1)
@@ -376,7 +401,11 @@ if ($appendToPreviousICSat) {
             }
         } else { Write-Verbose "Skipping SUMMARY entry $($previousIcsEvent.StartTime) - $($previousIcsEvent.EndTime)" }
     }
-    $periods = ($existingPeriods + $periods)
+    if ($periods.count -ne 0 -and $null -ne $periods) {
+        $periods = ($existingPeriods + $periods)
+    } else {
+        $periods = $existingPeriods
+    }
 }
 
 if ($splitByCourse -and -not $splitByOverride) {
@@ -423,13 +452,28 @@ foreach ($group in $periods) {
     } | Select-Object -ExpandProperty Name
 
     if ($splitByCourse) {
-        Write-Host "ICS content for $($group.Name):`n========================"
+        if ($group -ne $periods[0]) {
+            Write-Host "`n`n`n`n`n`n`n" # make cmdline output more readable
+        }
+        Write-Host "ICS content for $($group.Name):`n============================================================="
     }
-    # Use Select-Object to reorder properties and add calculated properties
+    # Use Select-Object to reorder properties and reformat for better cmdline output
     $calendarEntries | Select-Object (@(
             @{ Name = 'pre'; Expression = { if ($_.preExist) { '[X]' } else { '[ ]' } } },
-            @{ Name = 'StartTimeF'; Expression = { [DateTime]::ParseExact($_.StartTime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm') } },
-            @{ Name = 'EndTimeF'; Expression = { [DateTime]::ParseExact($_.EndTime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm') } }
+            @{ Name = 'StartTimeF'; Expression = { 
+                $datetime = $_.StartTime
+                if ($datetime -match ';.*:(\d{8}T\d{6})') { # workaraound because IcsEvent doesn't know if it's Summary (see .ToIcsEntry())
+                    $datetime = $matches[1]
+                }
+                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm')
+            } },
+            @{ Name = 'EndTimeF'; Expression = { 
+                $datetime = $_.EndTime
+                if ($datetime -match ';.*:(\d{8}T\d{6})') {
+                    $datetime = $matches[1]
+                }
+                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm')
+            } }
         ) + $properties + @{ 
             Name       = 'DescriptionF'; 
             Expression = {
@@ -437,9 +481,6 @@ foreach ($group in $periods) {
             } 
         }
     ) | Format-Table -Wrap -AutoSize | Out-String -Width 4096
-    if ($splitByCourse) {
-        Write-Host "`n"
-    }
 
 
     $IcsEntries = [System.Collections.Generic.List[string]]::new()
@@ -474,8 +515,6 @@ END:VTIMEZONE
 $(($IcsEntries -join "`n"))
 END:VCALENDAR
 "@
-
-
 
     try {
         if ($OutputFilePath) {
