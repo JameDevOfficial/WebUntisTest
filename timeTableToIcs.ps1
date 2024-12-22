@@ -18,6 +18,7 @@
 .PARAMETER dates
     An array of dates (either as strings or DateTime objects) for which to retrieve timetable data. 
     The default is the current week and the next three weeks.
+    Maximum range is defined by WebUntis admin afaik.
 
 .PARAMETER OutputFilePath
     The file path where the ICS file will be saved. The default is "calendar.ics".
@@ -70,7 +71,7 @@ param (
     [Alias('Date')]
     [ValidateScript({
             if ($_.Count -gt 4) {
-                throw 'The maximum number of weeks is 4. (Limit by WebUntis API)'
+                throw 'The maximum number of weeks is 4. (Limited by WebUntis API, max defined by admin)'
             }
             if ($_.GetType().Name -eq 'String') {
                 if (-not [datetime]::TryParse($_, [ref] $null)) {
@@ -284,22 +285,18 @@ if (-not $dontCreateMultiDayEvents) {
 
     # Always create a dummy Summary event so a file exists (prevents issues with outlook)
     if ($periods.Count -eq 0) {
-        $periods += [PeriodEntry]::new(
-            [IcsEvent]::new(
-@"
-BEGIN:VEVENT
-UID:0
-DTSTART;VALUE=DATE:$([datetime]::new(0).ToString('yyyyMMddTHHmmss'))
-DTEND;VALUE=DATE:$([datetime]::new(0).AddMinutes(1).ToString('yyyyMMddTHHmmss'))
-LOCATION:DUMMY
-SUMMARY:DUMMY
-DESCRIPTION:DUMMY
-STATUS:CANCELLED
-CATEGORIES:DUMMY
-END:VEVENT
-"@
-            ), @(), @() # Empty Rooms and Course list - don't need
-        )
+        $summaryJson = [PSCustomObject]@{
+            id         = $id
+            date       = [datetime]::new(0).Date.ToString('yyyyMMdd')
+            startTime  = [datetime]::new(0).ToString('hhmm')
+            endTime    = [datetime]::new(0).AddMinutes(1)
+            location   = ''
+            summary    = "DUMMY"
+            substText  = "Dummy because No events in next $($dates.Count) weeks" # next is not guaranteed
+            lessonCode = 'SUMMARY'
+            cellstate  = 'ADDITIONAL'
+        }
+        $newSummary = [PeriodEntry]::new($summaryJson, $rooms, $courses)
     }
 
     # Add WeekStartDate property to each period
