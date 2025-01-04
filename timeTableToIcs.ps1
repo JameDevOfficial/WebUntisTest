@@ -286,7 +286,7 @@ if (-not $dontCreateMultiDayEvents) {
     # Always create a dummy Summary event so a file exists (prevents issues with outlook)
     if ($periods.Count -eq 0) {
         $summaryJson = [PSCustomObject]@{
-            id         = $id
+            id         = 1
             date       = [datetime]::new(0).Date.ToString('yyyyMMdd')
             startTime  = [datetime]::new(0).ToString('hhmm')
             endTime    = [datetime]::new(0).AddMinutes(1)
@@ -338,7 +338,7 @@ if (-not $dontCreateMultiDayEvents) {
         foreach ($dayGroup in $dayGroups) {
             $i++
             $firstPeriod = $dayGroup[0]
-            $lastPeriod = $dayGroup[$dayGroups.Count - 1]
+            $lastPeriod = $dayGroup[$dayGroup.Count - 1]
 
             $culture = [System.Globalization.CultureInfo]::CurrentCulture
             $calendar = $culture.Calendar
