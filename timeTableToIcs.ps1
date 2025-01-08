@@ -278,7 +278,8 @@ foreach ($date in $dates) {
 $periods = $periods | Sort-Object -Property startTime
 
 if ($periods.Length -eq 0 -or $null -eq $periods) {
-    
+    Write-Host "No Periods in the specified time frame"
+    exit 0
 }
 
 if (-not $dontCreateMultiDayEvents) {
@@ -286,15 +287,18 @@ if (-not $dontCreateMultiDayEvents) {
     # Always create a dummy Summary event so a file exists (prevents issues with outlook)
     if ($periods.Count -eq 0) {
         $summaryJson = [PSCustomObject]@{
-            id         = 1
-            date       = [datetime]::new(0).Date.ToString('yyyyMMdd')
-            startTime  = [datetime]::new(0).ToString('hhmm')
-            endTime    = [datetime]::new(0).AddMinutes(1)
-            location   = ''
-            summary    = "DUMMY"
-            substText  = "Dummy because No events in next $($dates.Count) weeks" # next is not guaranteed
+            id         = 0
+            date       = ([datetime]"1970-01-01T00:00:00Z").Date.ToString('yyyyMMdd')
+            startTime  = ([datetime]"1970-01-01T00:00:00Z").ToString('hhmm')
+            endTime    = ([datetime]"1970-01-01T00:00:00Z").AddMinutes(1)
+            course = @{
+                course = @{
+                    longName = "DUMMY"
+                }
+            }
+            substText  = "Dummy because No events in timeframe $($dates[0]) - $($dates[$dates.Count - 1])" # next is not guaranteed
             lessonCode = 'SUMMARY'
-            cellstate  = 'ADDITIONAL'
+            cellstate  = 'CANCEL'
         }
         $newSummary = [PeriodEntry]::new($summaryJson, $rooms, $courses)
     }
@@ -354,12 +358,15 @@ if (-not $dontCreateMultiDayEvents) {
 
             # Create a new JSON object with necessary properties
             $summaryJson = [PSCustomObject]@{
-                id         = $id
+                id         = $i
                 date       = $firstPeriod.startTime.Date.ToString('yyyyMMdd')
                 startTime  = $firstPeriod.startTime.ToString('hhmm')
                 endTime    = $lastPeriod.endTime
-                location   = ''
-                summary    = "Calendar Week $weekOfYear" # FIXME: $period.course.course.longName is used for the event summary...
+                course     = @{
+                    course = @{
+                        longName = "Calendar Week $weekOfYear"
+                    }
+                }
                 substText  = "Refreshed at $(Get-Date); For setting longer notifications after some weeks of absence`n test"
                 lessonCode = 'SUMMARY'
                 cellstate  = 'ADDITIONAL'
