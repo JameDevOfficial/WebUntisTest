@@ -139,14 +139,44 @@ jobs:
       # Generate index.html with links to all files in .out directory
       - name: Generate index.html
         run: |
-          echo "<html><body><h1>Generated Files</h1><ul>" > .out/index.html
+          echo "<!DOCTYPE html>" > .out/index.html
+          echo "<html>" >> .out/index.html
+          echo "<head>" >> .out/index.html
+          echo "  <meta charset=\"UTF-8\" />" >> .out/index.html
+          echo "  <title>Generated Files</title>" >> .out/index.html
+
+          # Quick inline CSS
+          echo "  <style>body{font-family:sans-serif;margin:1rem;background:#fafafa}li{margin:0.5rem 0}a{color:#007bff;}a:hover{text-decoration:underline;}button{margin-left:0.5rem;background:#007bff;color:#fff;border:none;border-radius:4px;padding:0.3rem 0.6rem;cursor:pointer;}button:hover{background:#0056b3;}</style>" >> .out/index.html
+
+          # JavaScript for copying link
+          echo "  <script>" >> .out/index.html
+          echo "    function copyLink(link) {" >> .out/index.html
+          echo "      navigator.clipboard.writeText(link);" >> .out/index.html
+          echo "      alert('Link copied: ' + link);" >> .out/index.html
+          echo "    }" >> .out/index.html
+          echo "  </script>" >> .out/index.html
+
+          echo "</head>" >> .out/index.html
+          echo "<body>" >> .out/index.html
+          echo "  <h1>Generated Files</h1>" >> .out/index.html
+          echo "  <ul>" >> .out/index.html
+
           for file in .out/*; do
             fname=$(basename "$file")
+            # Skip index.html itself
             if [ "$fname" != "index.html" ]; then
-              echo "<li><a href=\"$fname\">$fname</a></li>" >> .out/index.html
+              echo "    <li>" >> .out/index.html
+              # 1) Clicking the filename now copies its link instead of opening
+              echo "      <a href=\"#\" onclick=\"copyLink(window.location.origin + window.location.pathname + '$fname'); return false;\">$fname</a>" >> .out/index.html
+              # 2) The button actually opens (downloads/displays) the file
+              echo "      <button onclick=\"window.open('$fname', '_blank');\">Download</button>" >> .out/index.html
+              echo "    </li>" >> .out/index.html
             fi
           done
-          echo "</ul></body></html>" >> .out/index.html
+
+          echo "  </ul>" >> .out/index.html
+          echo "</body>" >> .out/index.html
+          echo "</html>" >> .out/index.html
         shell: bash
 
       - name: Setup Pages
