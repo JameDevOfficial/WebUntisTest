@@ -101,7 +101,7 @@ param (
     [Parameter(
         ValueFromPipelineByPropertyName = $true,
         HelpMessage = 'A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.'
-        #Mandatory = {$splitByOverride}
+        #Mandatory = {$splitByOverrides}
     )]
     [hashtable]$overrideSummaries,
     [Parameter(
@@ -123,7 +123,7 @@ param (
     [Parameter(
         ParameterSetName = 'OutputControl',
         HelpMessage = 'Split the timetable data into separate ICS files for each course.'
-        #Mandatory = {$splitByOverride}
+        #Mandatory = {$splitByOverrides}
     )]
     [switch]$splitByCourse,
     [Parameter(
@@ -151,6 +151,9 @@ if (-not (Test-Path $appendToPreviousICSat)) {
 $dates = $dates | ForEach-Object {
     if ($_ -is [string]) { [datetime]::Parse($_) } else { $_ }
 }
+
+
+Write-Host $overrideSummaries
 
 function Get-SingleElement {
     param (
@@ -427,7 +430,7 @@ if ($appendToPreviousICSat) {
     }
 }
 
-if ($splitByCourse -and -not $splitByOverride) {
+if ($splitByCourse -and -not $splitByOverrides) {
     $tmpPeriods = $periods
     $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) {
             $_.course.course.name 
@@ -437,7 +440,7 @@ if ($splitByCourse -and -not $splitByOverride) {
     if ($outAllFormats) {
         $periods += ($tmpPeriods | Group-Object -Property { 'All' })
     }
-} elseif ($splitByOverride) {
+} elseif ($splitByOverrides) {
     $tmpPeriods = $periods
     $periods = $periods | Group-Object -Property { if (-not [string]::IsNullOrEmpty($_.course.course.name)) { 
             Write-Verbose "Checking for override: $($_.course.course.name) $($overrideSummaries.Keys -contains $_.course.course.name)"
