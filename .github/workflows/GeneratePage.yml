@@ -143,38 +143,76 @@ jobs:
           echo "<html>" >> .out/index.html
           echo "<head>" >> .out/index.html
           echo "  <meta charset=\"UTF-8\" />" >> .out/index.html
-          echo "  <title>Generated Files</title>" >> .out/index.html
+          echo "  <title>WebUntis iCal Scraper output</title>" >> .out/index.html
 
           # Quick inline CSS
-          echo "  <style>body{font-family:sans-serif;margin:1rem;background:#fafafa}li{margin:0.5rem 0}a{color:#007bff;}a:hover{text-decoration:underline;}button{margin-left:0.5rem;background:#007bff;color:#fff;border:none;border-radius:4px;padding:0.3rem 0.6rem;cursor:pointer;}button:hover{background:#0056b3;}</style>" >> .out/index.html
+          echo "  <style>" >> .out/index.html
+          echo "    body { font-family: sans-serif; margin: 1rem; background: #fafafa; }" >> .out/index.html
+          echo "    table { border-collapse: collapse; width: auto; }" >> .out/index.html
+          echo "    td { padding: 0.5rem; vertical-align: middle; }" >> .out/index.html
+          echo "    button { margin-left: 0.5rem; background: #007bff; color: #fff; border: none; border-radius: 4px; padding: 0.3rem 0.6rem; cursor: pointer; }" >> .out/index.html
+          echo "    button:hover { background: #0056b3; }" >> .out/index.html
+          echo "    a { color: #007bff; }" >> .out/index.html
+          echo "    a:hover { text-decoration: underline; }" >> .out/index.html
+          echo "  </style>" >> .out/index.html
 
-          # JavaScript for copying link
+          # JavaScript for copying link and importing calendar
           echo "  <script>" >> .out/index.html
           echo "    function copyLink(link) {" >> .out/index.html
           echo "      navigator.clipboard.writeText(link);" >> .out/index.html
           echo "      alert('Link copied: ' + link);" >> .out/index.html
+          echo "    }" >> .out/index.html
+          echo "    function importCalendar(fname) {" >> .out/index.html
+          echo "      // Build a webcals:// URL based on the current host/path"
+          echo "      // This assumes your .ics files are in the same directory as index.html"
+          echo "      const webcalsUrl = 'webcals://' + window.location.host + window.location.pathname.replace('index.html', '') + fname;" >> .out/index.html
+          echo "      // Redirect to the webcals URL to trigger the calendar import"
+          echo "      window.location.href = webcalsUrl;" >> .out/index.html
           echo "    }" >> .out/index.html
           echo "  </script>" >> .out/index.html
 
           echo "</head>" >> .out/index.html
           echo "<body>" >> .out/index.html
           echo "  <h1>Generated Files</h1>" >> .out/index.html
-          echo "  <ul>" >> .out/index.html
+
+          # Start the invisible table
+          echo "  <table>" >> .out/index.html
+          echo "    <tbody>" >> .out/index.html
 
           for file in .out/*; do
             fname=$(basename "$file")
+
             # Skip index.html itself
             if [ "$fname" != "index.html" ]; then
-              echo "    <li>" >> .out/index.html
-              # 1) Clicking the filename now copies its link instead of opening
-              echo "      <a href=\"#\" onclick=\"copyLink(window.location.origin + window.location.pathname + '$fname'); return false;\">$fname</a>" >> .out/index.html
-              # 2) The button actually opens (downloads/displays) the file
-              echo "      <button onclick=\"window.open('$fname', '_blank');\">Download</button>" >> .out/index.html
-              echo "    </li>" >> .out/index.html
+              echo "      <tr>" >> .out/index.html
+              # File name cell
+              echo "        <td>$fname</td>" >> .out/index.html
+
+              # If this file is an ICS, show the 'Import' button
+              if [[ $fname == *.ics ]]; then
+                echo "        <td><button onclick=\"importCalendar('$fname')\">Import</button></td>" >> .out/index.html
+              else
+                # Empty cell if not ICS
+                echo "        <td></td>" >> .out/index.html
+              fi
+
+              # Copy URL button cell
+              echo "        <td>" >> .out/index.html
+              echo "          <button onclick=\"copyLink(window.location.origin + window.location.pathname.replace('index.html', '') + '$fname')\">Copy URL</button>" >> .out/index.html
+              echo "        </td>" >> .out/index.html
+
+              # Download/Display button cell
+              echo "        <td>" >> .out/index.html
+              echo "          <button onclick=\"window.open('$fname', '_blank');\">Download</button>" >> .out/index.html
+              echo "        </td>" >> .out/index.html
+
+              echo "      </tr>" >> .out/index.html
             fi
           done
 
-          echo "  </ul>" >> .out/index.html
+          echo "    </tbody>" >> .out/index.html
+          echo "  </table>" >> .out/index.html
+
           echo "</body>" >> .out/index.html
           echo "</html>" >> .out/index.html
         shell: bash
