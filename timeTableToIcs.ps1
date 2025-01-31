@@ -82,7 +82,7 @@ param (
             }
             $true
         })]
-    [System.Object[]]$dates = @( (@(-7, 0, 7, 14) | ForEach-Object { (Get-Date).AddDays($_) }) ),
+    [System.Object[]]$dates = @( (@(0, 7) | ForEach-Object { (Get-Date).AddDays($_) }) ),
     [switch]$dontCreateMultiDayEvents,
     [ValidateScript({ if (($_ -and -not $dontCreateMultiDayEvents) -eq $false) {throw "Can't use together with -dontCreateMultiDayEvents"} else {$true} })]
     [switch]$dontSplitOnGapDays,
@@ -111,7 +111,7 @@ param (
     [ValidateNotNullOrEmpty()]
     [ValidateScript({
             if (-not (Test-Path $_)) {
-                throw "File does not exist: $_"
+                Write-Warning "Previous File does not exist: $_"
             }
             $content = Get-Content $_ -Raw
             if ($content -notmatch '^BEGIN:VCALENDAR' -or $content -notmatch 'END:VCALENDAR\s*$') {
@@ -220,6 +220,11 @@ foreach ($date in $dates) {
     $response = Invoke-WebRequest -UseBasicParsing -Uri $url -Method Get -WebSession $session -Headers $headers
     $object = $response | ConvertFrom-Json -ErrorAction Stop
 
+    if ($null -ne $object.data.error) {
+        Write-Warning "::warning::Warning: $($object.data.error.data.messageKey) for value: $($object.data.error.data.messageArgs[0])"
+        break
+    }
+
     $class = [PeriodTableEntry]
 
     try {
@@ -278,7 +283,7 @@ foreach ($date in $dates) {
 $periods = $periods | Sort-Object -Property startTime
 
 if ($periods.Length -eq 0 -or $null -eq $periods) {
-    Write-Host "No Periods in the specified time frame"
+    Write-Host "::warning::No Periods in the specified time frame"
     exit 0
 }
 
@@ -548,7 +553,6 @@ END:VCALENDAR
         throw
     }
 
-
 }
 
 ####### Class definitions #######
@@ -562,6 +566,8 @@ class IcsEvent {
     [string]$Description
     [string]$Status
     [string]$Category
+    [int]$Priority
+    [bool]$Transparent
     [bool]$preExist = $false
 
     IcsEvent([PeriodEntry]$period) {
@@ -593,6 +599,8 @@ class IcsEvent {
             'UNTIS_ADDITIONAL' { 'Additional' }
             default { $_ }
         }
+        $this.Priority = 10 - $period.priority
+        $this.Transparent = ($this.Status -ne 'CONFIRMED')
     }
 
     IcsEvent([string]$icsText) {
@@ -611,6 +619,8 @@ class IcsEvent {
         if ($icsText -match 'DESCRIPTION:(.*)') { $this.Description = $matches[1].Trim() } else { throw 'Description not found in ICS entry.' }
         if ($icsText -match 'STATUS:(.*)') { $this.Status = $matches[1].Trim() } else { throw 'Status not found in ICS entry.' }
         if ($icsText -match 'CATEGORIES:(.*)') { $this.Category = $matches[1].Trim() } else { throw 'Category not found in ICS entry.' }
+        if ($icsText -match 'PRIORITY:(.*)') {$this.Priority = $matches[1].Trim() } else { Write-Warning 'Priority not found in ICS entry'; $this.Priority = 5 }
+        if ($icsText -match 'TRANSP:(.*)') {$this.Transparent = ($matches[1].Trim() -eq 'TRANSPARENT') } else { Write-Warning 'Transparency not found in ICS entry'; $this.Transparent = $false }
     }
 
     [string] ToIcsEntry() {
@@ -624,6 +634,8 @@ SUMMARY:$($this.Summary)
 DESCRIPTION:$($this.Description)
 STATUS:$($this.Status)
 CATEGORIES:$($this.Category)
+PRIORITY:$($this.Priority)
+TRANSP:$(switch ($this.Transparent) { $true {'TRANSPARENT'} $false {'OPAQUE'}})
 END:VEVENT
 "@
     }
@@ -724,6 +736,7 @@ class PeriodEntry {
         $this.lessonCode = $icsEvent.Category
         $this.substText = $icsEvent.Description
         $this.cellState = $icsEvent.Status
+        $this.priority = 10 - $icsEvent.Priority
 
         try {
             $this.startTime = [datetime]::ParseExact($icsEvent.StartTime, 'yyyyMMddTHHmmss', $null)
@@ -739,7 +752,7 @@ class PeriodEntry {
     }
 
     [string] ToString() {
-        return "ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), Date: $($this.date), Start Time: $($this.startTime), End Time: $($this.endTime), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Cell State: $($this.cellState), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
+        return "Date: $($this.date), Start Time: $($this.startTime), Cell State: $($this.cellState), ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), End Time: $($this.endTime), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
     }
 }
 
