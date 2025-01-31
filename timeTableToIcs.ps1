@@ -143,6 +143,9 @@ param (
 if ($outAllFormats) {
     $splitByCourse = $true
 }
+if (-not (Test-Path $appendToPreviousICSat)) {
+    $appendToPreviousICSat = $null
+}
 
 # Convert any string inputs to DateTime objects
 $dates = $dates | ForEach-Object {
@@ -325,7 +328,7 @@ if (-not $dontCreateMultiDayEvents) {
 
 
         $first = $sortedPeriods[0]
-        $sortedPeriods.remove($first)
+        $sortedPeriods.remove($first) | Out-Null
 
         $dayGroups = [System.Collections.Generic.List[System.Collections.Generic.List[PeriodEntry]]]::new()
         $previousDate = $first.startTime.Date
@@ -367,16 +370,23 @@ if (-not $dontCreateMultiDayEvents) {
                 date       = $firstPeriod.startTime.Date.ToString('yyyyMMdd')
                 startTime  = $firstPeriod.startTime.ToString('hhmm')
                 endTime    = $lastPeriod.endTime
-                course     = @{
-                    course = @{
-                        longName = "Calendar Week $weekOfYear"
-                    }
-                }
-                substText  = "Refreshed at $(Get-Date); For setting longer notifications after some weeks of absence`n test"
+                elements   = @(@{
+                    type = 3
+                    id = 0
+                })
+                substText  = "Calendar Week $weekOfYear; For setting longer notifications after some weeks of absence"
                 lessonCode = 'SUMMARY'
                 cellstate  = 'ADDITIONAL'
             }
-            $newSummary = [PeriodEntry]::new($summaryJson, $rooms, $courses)
+            $newSummary = [PeriodEntry]::new(
+                $summaryJson,
+                $rooms, 
+                [Course]::new([PeriodTableEntry]::new(@{
+                    type = 3
+                    id = 0
+                    longName = "Refreshed: $(Get-Date)"
+                }))
+            )
             $multiDayEvents.Add($newSummary)
         }
     }
@@ -384,8 +394,8 @@ if (-not $dontCreateMultiDayEvents) {
     $periods = ($multiDayEvents + $periods)
 }
 
-foreach ($period in $periods) {
-    if ($isDaylightSavingTime) {
+if ($isDaylightSavingTime) {
+    foreach ($period in $periods) {
         $period.startTime = $period.startTime.AddHours(-1)
         $period.endTime = $period.endTime.AddHours(-1)
     }
@@ -715,7 +725,7 @@ class PeriodEntry {
         $this.studentGroup = $jsonObject.studentGroup
         $this.code = $jsonObject.code
         $this.cellState = $jsonObject.cellState
-        $this.priority = $jsonObject.priority
+        $this.priority = switch ($jsonObject.priority) {$null {5} default {$_}}
         $this.isCancelled = $jsonObject.is.cancelled
         $this.isStandard = $jsonObject.is.standard
         $this.isEvent = $jsonObject.is.event
