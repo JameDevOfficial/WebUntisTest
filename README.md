@@ -1,3 +1,8 @@
+# WebUntis Timetable to ICS
+[![Update Calendar and Deploy to GitHub Pages](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg)](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml)
+
+Scrapes the official API the website uses and processes the entries into a (or multiple) subscribable ICS files.
+
 ## Usage:
 1. Fork this repository 
 2. Enable GitHub Pages with workflow as source.
@@ -35,7 +40,7 @@ The GitHub Actions workflow `GeneratePage.yml` is designed to update and deploy 
 Configure the following secrets in your repository according to the parameters:
 
 - BASE_URL: `#####.webuntis.com` (Your officially given WebUntis website)
-- COOKIE: `##################` (Get by opening official page with dev tools and copy)
+- COOKIE: `##################` (Get by opening official page with dev tools and copy API request)
 - ELEMENT_ID: `####` (Course ID, 4 digits long, get from URL via official website)
 - OVERRIDE_SUMMARIES: `@{"GK" = "GK, Gemeinschaftskunde";"LBTL1" = "EL, Elektrotechnik";...}`
 - TENANT_ID: `#######` (Get by opening official page with dev tools and copy http request as PowerShell)
