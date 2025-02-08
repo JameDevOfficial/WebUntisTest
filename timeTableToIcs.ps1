@@ -182,7 +182,7 @@ param (
                 )
             }
     })]
-    [System.Globalization.CultureInfo]$culture,
+    [System.Globalization.CultureInfo]$culture = (Get-Culture),
     [ValidateNotNullOrEmpty()]
     [string]$cookie,
     [ValidateNotNullOrEmpty()]
@@ -204,6 +204,7 @@ $dates = $dates | ForEach-Object {
 if ($culture -isnot [System.Globalization.CultureInfo]) {
     $culture = [System.Globalization.CultureInfo]::GetCultureInfo($culture)
 }
+Write-Host "::info::Using $($culture.NativeName) as formatting culture."
 
 function Get-SingleElement {
     param (
@@ -410,7 +411,6 @@ if (-not $dontCreateMultiDayEvents) {
             $firstPeriod = $dayGroup[0]
             $lastPeriod = $dayGroup[$dayGroup.Count - 1]
 
-            $culture = [System.Globalization.CultureInfo]::CurrentCulture
             $calendar = $culture.Calendar
             $weekOfYear = $calendar.GetWeekOfYear($firstPeriod.startTime, $culture.DateTimeFormat.CalendarWeekRule, $culture.DateTimeFormat.FirstDayOfWeek)
 
@@ -542,14 +542,14 @@ foreach ($group in $periods) {
                 if ($datetime -match ';.*:(\d{8}T\d{6})') { # workaraound because IcsEvent doesn't know if it's Summary (see .ToIcsEntry())
                     $datetime = $matches[1]
                 }
-                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm')
+                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString("g", $culture)
             } },
             @{ Name = 'EndTimeF'; Expression = { 
                 $datetime = $_.EndTime
                 if ($datetime -match ';.*:(\d{8}T\d{6})') {
                     $datetime = $matches[1]
                 }
-                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString('dd.MM.yy HH:mm')
+                [DateTime]::ParseExact($datetime, 'yyyyMMddTHHmmss', $null).ToString("g", $culture)
             } }
         ) + $properties + @{ 
             Name       = 'DescriptionF'; 
