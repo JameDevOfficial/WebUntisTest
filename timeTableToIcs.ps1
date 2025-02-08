@@ -94,32 +94,58 @@ param (
     )]
     [Alias('PSPath')]
     [ValidateNotNullOrEmpty()]
-    [ValidateScript({ $_.EndsWith('.ics') })] 
-    [string]$OutputFilePath = 'calendar.ics',
-    # Specifies a path to one or more locations.
+    [ValidateScript({
+        if ($_.Extension.ToLower() -eq '.ics') {
+            $true
+        }
+        else {
+            throw "Output file must have a .ics extension."
+        }
+    })]
+    [System.IO.FileInfo]$OutputFilePath = [System.IO.FileInfo]"calendar.ics",
     [ValidateNotNullOrEmpty()]
+    [ValidateScript({
+        if (-not ($_ -is [hashtable])) {
+            throw "The parameter must be a hashtable."
+        }
+        foreach ($key in $_.Keys) {
+            if (-not ($key -is [string]) -or [string]::IsNullOrWhiteSpace($key)) {
+                throw "All keys in overrideSummaries must be non-empty strings. Invalid key: '$key'."
+            }
+            $value = $_[$key]
+            if (-not ($value -is [string]) -or [string]::IsNullOrWhiteSpace($value)) {
+                throw "All values in overrideSummaries must be non-empty strings. Invalid value for key '$key': '$value'."
+            }
+        }
+        $true
+    })]
     [Parameter(
         ValueFromPipelineByPropertyName = $true,
-        HelpMessage = 'A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.'
-        #Mandatory = {$splitByOverrides}
+        HelpMessage = 'A hashtable to override the summaries of the courses. The key is the original course (short) name, the value is the new course name.'
     )]
     [hashtable]$overrideSummaries,
     [Parameter(
         ValueFromPipelineByPropertyName = $true,
         HelpMessage = 'Path to an existing ICS file to which the new timetable data should be appended.'
     )]
-    [ValidateNotNullOrEmpty()]
+    [ValidateNotNull()]
     [ValidateScript({
-            if (-not (Test-Path $_)) {
-                Write-Warning "Previous File does not exist: $_"
-            }
-            $content = Get-Content $_ -Raw
-            if ($content -notmatch '^BEGIN:VCALENDAR' -or $content -notmatch 'END:VCALENDAR\s*$') {
-                throw "Invalid .ics file: $_"
-            }
-            $true
-        })]
-    [string]$appendToPreviousICSat,
+        # Ensure the file exists.
+        if (-not $_.Exists) {
+            throw "The file '$($_.FullName)' does not exist."
+        }
+        # Check that the file has a .ics extension (case-insensitive).
+        if ($_.Extension.ToLower() -ne ".ics") {
+            throw "The file '$($_.FullName)' does not have a .ics extension."
+        }
+        # Read the file content and verify it looks like a valid ICS file.
+        $content = Get-Content -Path $_.FullName -Raw
+        if ($content -notmatch '^BEGIN:VCALENDAR' -or $content -notmatch 'END:VCALENDAR\s*$') {
+            throw "The file '$($_.FullName)' does not appear to be a valid ICS file."
+        }
+        $true
+    })]
+    [System.IO.FileInfo]$appendToPreviousICSat,
     [Parameter(
         ParameterSetName = 'OutputControl',
         HelpMessage = 'Split the timetable data into separate ICS files for each course.'
@@ -134,6 +160,29 @@ param (
     [switch]$splitByOverrides,
     [Parameter(ParameterSetName = 'OutputControl')]
     [switch]$outAllFormats,
+    [Parameter(HelpMessage = 'Controls DST/TZ info (and how DateTimes are formatted)')]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+        # Retrieve all available cultures (you can choose to restrict to a subset if desired)
+        $allCultures = [System.Globalization.CultureInfo]::GetCultures([System.Globalization.CultureTypes]::AllCultures)
+        # Filter cultures by matching the user’s typed text (case-insensitive)
+        $allCultures |
+            Where-Object { $_.Name -like "*$wordToComplete*" } |
+            ForEach-Object {
+                # Create a CompletionResult for each matching culture.
+                # The first argument is the text inserted upon selection,
+                # the second is the text displayed,
+                # the third is the result type,
+                # and the fourth is a tooltip (here we use the DisplayName).
+                [System.Management.Automation.CompletionResult]::new(
+                    $_.Name,
+                    $_.Name,
+                    'ParameterValue',
+                    $_.DisplayName
+                )
+            }
+    })]
+    [System.Globalization.CultureInfo]$culture,
     [ValidateNotNullOrEmpty()]
     [string]$cookie,
     [ValidateNotNullOrEmpty()]
@@ -150,6 +199,10 @@ if (-not (Test-Path $appendToPreviousICSat)) {
 # Convert any string inputs to DateTime objects
 $dates = $dates | ForEach-Object {
     if ($_ -is [string]) { [datetime]::Parse($_) } else { $_ }
+}
+
+if ($culture -isnot [System.Globalization.CultureInfo]) {
+    $culture = [System.Globalization.CultureInfo]::GetCultureInfo($culture)
 }
 
 function Get-SingleElement {
@@ -214,6 +267,7 @@ $legende = [System.Collections.Generic.List[PeriodTableEntry]]::new();
 # Check whether the current date is in Daylight Saving Time
 $isDaylightSavingTime = (Get-Date).IsDaylightSavingTime()
 
+$lastImportTimeStamp = $null
 foreach ($date in $dates) {
 
     Write-Verbose "Getting Data for week of $($date.ToString('yyyy-MM-dd'))"
@@ -275,12 +329,16 @@ foreach ($date in $dates) {
                 throw
             }
         }
+
+        $lastImportTimeStamp = [System.DateTimeOffset]::FromUnixTimeMilliseconds($object.lastImportTimeStamp).DateTime
     } catch [FormatException] {
         Write-Error 'Invalid Response regarding datetime format:'
         throw
         exit 1
     }
-
+}
+if (-not $isDaylightSavingTime) { # website seems to display time +1h from the unix time stamp it serves. (shouldn't it be -1 for DST?)
+    $lastImportTimeStamp = $lastImportTimeStamp.AddHours(1);
 }
 
 $periods = $periods | Sort-Object -Property startTime
@@ -384,7 +442,7 @@ if (-not $dontCreateMultiDayEvents) {
                 [Course]::new([PeriodTableEntry]::new(@{
                     type = 3
                     id = 0
-                    longName = "Refreshed: $(Get-Date)"
+                    longName = "Last Gen: $([System.String]::Format($culture, "{0:ddd}, {0:d} {0:t}", (Get-Date))), Source updated: $([System.String]::Format($culture, "{0:ddd}, {0:d} {0:t}", $lastImportTimeStamp))"
                 }))
             )
             $multiDayEvents.Add($newSummary)
