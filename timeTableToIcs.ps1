@@ -204,7 +204,7 @@ $dates = $dates | ForEach-Object {
 if ($culture -isnot [System.Globalization.CultureInfo]) {
     $culture = [System.Globalization.CultureInfo]::GetCultureInfo($culture)
 }
-Write-Host "::info::Using $($culture.NativeName) as formatting culture."
+Write-Host "::notice::Using $($culture.NativeName) as formatting culture."
 
 function Get-SingleElement {
     param (

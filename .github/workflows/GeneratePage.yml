@@ -67,10 +67,10 @@ jobs:
         shell: pwsh
 
       # Debugging: List files after generation
-      - name: List Files After Generation
+      - name: List Files After Download
         run: |
-          Write-Host "Files in .out/:"
-          Get-ChildItem ./.out/ -Recurse
+          Write-Host "Files in current directory:"
+          Get-ChildItem -Recurse
         shell: pwsh
 
       # Compare new script output with the previous script output
