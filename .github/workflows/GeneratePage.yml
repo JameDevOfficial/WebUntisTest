@@ -82,7 +82,7 @@ jobs:
           $previousScriptOutputPath = "previous_script_output.txt/script_output.txt"
           Write-Host "Previous script output path: $previousScriptOutputPath"
 
-          if (Test-Path script_output.txt) {
+          if (-not Test-Path script_output.txt) {
             Write-Host "::error::No script output!"
             exit 0;
           }
