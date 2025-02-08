@@ -45,6 +45,7 @@ jobs:
 
       # Debugging: List files after downloading the artifact
       - name: List Files After Download
+        if: runner.debug == 1
         run: |
           Write-Host "Files in current directory:"
           Get-ChildItem -Recurse
@@ -67,7 +68,8 @@ jobs:
         shell: pwsh
 
       # Debugging: List files after generation
-      - name: List Files After Download
+      - name: List Files After Generation
+        if: runner.debug == 1
         run: |
           Write-Host "Files in current directory:"
           Get-ChildItem -Recurse
@@ -80,6 +82,10 @@ jobs:
           $previousScriptOutputPath = "previous_script_output.txt/script_output.txt"
           Write-Host "Previous script output path: $previousScriptOutputPath"
 
+          if (Test-Path script_output.txt) {
+            Write-Host "::error::No script output!"
+            exit 0;
+          }
           if (Test-Path $previousScriptOutputPath) {
             Write-Host "Comparing previous script output with the new one:"
             # Compare the two files
