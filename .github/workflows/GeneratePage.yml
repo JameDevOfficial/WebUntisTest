@@ -5,9 +5,9 @@ on:
     - cron: "0 */6 * * *"  # Every 6 hours
     - cron: "0 6 * * *"    # Run at 6:00 UTC every day
     - cron: "0 7 * * *"    # Run at 7:00 UTC every day
-  workflow_dispatch:  # Allows manual triggering of the workflow
+  workflow_dispatch:       # Allows manual triggering of the workflow
   push:
-    branches: ["main"]  # Triggers deployment when changes are pushed to main
+    branches: ["main"]     # Triggers deployment when changes are pushed to main
 
 permissions:
   actions: read        # Allow reading of workflow run details and artifacts
@@ -32,7 +32,8 @@ jobs:
           path: previous_script_output.txt
           branch: main
         continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
-        # Download the previous script output (if available)
+
+      # Download the previous ICS (if available)
       - name: Download Previous ICS
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -58,13 +59,14 @@ jobs:
       - name: Run PowerShell Script and Capture Output
         run: |
           if (Test-Path "./previous_calendar.ics/calendar.ics") {
-            Write-Host ::notice::Appending to the previous calendar.
+            Write-Host "::notice::Appending to the previous calendar."
             ./timeTableToIcs.ps1 -appendToPreviousICSat "./previous_calendar.ics/calendar.ics" -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           } else {
             ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           }
         shell: pwsh
-      # Debugging: List files after downloading the artifact
+
+      # Debugging: List files after generation
       - name: List Files After Generation
         run: |
           Write-Host "Files in .out/:"
@@ -96,7 +98,6 @@ jobs:
             Write-Host "::notice::No previous script output found. Assuming changes."
             echo "changes_detected=true" >> $env:GITHUB_OUTPUT
           }
-          echo "changes_detected=true" >> $env:GITHUB_OUTPUT # TODO: fix comparison
         shell: pwsh
 
       # Upload the new script output as an artifact for future comparison
@@ -106,8 +107,15 @@ jobs:
           name: script-output
           path: script_output.txt
 
-      # Upload the new calendar(s) as an artifact for deployment
+      # Warn if no changes were detected in the script output
+      - name: Warn if No Changes Detected
+        if: steps.compare.outputs.changes_detected == 'false'
+        run: echo "::warning::No changes detected in script output, skipping artifact upload and deployment."
+        shell: pwsh
+
+      # Upload the new calendar(s) as an artifact for deployment if changes were detected
       - name: Upload Artifacts
+        if: steps.compare.outputs.changes_detected == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: calendar

@@ -152,9 +152,6 @@ $dates = $dates | ForEach-Object {
     if ($_ -is [string]) { [datetime]::Parse($_) } else { $_ }
 }
 
-
-Write-Host $overrideSummaries
-
 function Get-SingleElement {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
