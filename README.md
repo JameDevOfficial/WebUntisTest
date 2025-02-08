@@ -1,10 +1,12 @@
 # WebUntis Timetable to ICS
+
 [![Update Calendar and Deploy to GitHub Pages](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg)](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml)
 
 Scrapes the official API the website uses and processes the entries into a (or multiple) subscribable ICS files.
 
-## Usage:
-1. Fork this repository 
+## Usage
+
+1. Fork this repository
 2. Enable GitHub Pages with workflow as source.
 3. Store the environment variables `BASE_URL`, `ELEMENT_ID`, `OVERRIDE_SUMMARIES`, `COOKIE` and `TENANT_ID` in the repos **secrets**
 4. Adjust cronjob in ./.github/workflows/GeneratePage.yml to your needs.
@@ -31,18 +33,20 @@ This repository contains a GitHub Actions workflow and a PowerShell script to ge
 - `splitByCourse`: If set, the timetable data will be split into separate ICS files for each course.
 - `splitByOverrides`: If set, the timetable data will be split into separate ICS files for each course defined in overrideSummaries and the remaining misc. classes.
 - `outAllFormats`: If set, the timetable data will be output in all formats.
+- `culture`: If set, uses a specific culture for datetime formatting.
 - `cookie`: The cookie value for authentication.
 - `tenantId`: The tenant ID for authentication.
 
 ### Workflow: `GeneratePage.yml`
 
-The GitHub Actions workflow `GeneratePage.yml` is designed to update and deploy the ICS calendar file to GitHub Pages. 
+The GitHub Actions workflow `GeneratePage.yml` is designed to update and deploy the ICS calendar file to GitHub Pages.
 Configure the following secrets in your repository according to the parameters:
 
 - BASE_URL: `#####.webuntis.com` (Your officially given WebUntis website)
 - COOKIE: `##################` (Get by opening official page with dev tools and copy API request)
 - ELEMENT_ID: `####` (Course ID, 4 digits long, get from URL via official website)
 - OVERRIDE_SUMMARIES: `@{"GK" = "GK, Gemeinschaftskunde";"LBTL1" = "EL, Elektrotechnik";...}`
+- CULTURE: `de-DE` (Adjust to your preference, any [.NET recognized language tag](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-lcid/a9eac961-e77d-41a6-90a5-ce1a8b0cdb9c))
 - TENANT_ID: `#######` (Get by opening official page with dev tools and copy http request as PowerShell)
 
 The workflow performs the following steps:
@@ -58,6 +62,7 @@ The workflow performs the following steps:
 #### Schedule
 
 The workflow is scheduled to run at the following times:
+
 - Every 6 hours
 - Daily at 6:00 UTC
 - Daily at 7:00 UTC
