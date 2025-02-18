@@ -2,9 +2,9 @@ name: Update Calendar and Deploy to GitHub Pages
 
 on:
   schedule:
-    - cron: "0 */6 * * *"  # Every 6 hours
-    - cron: "0 6 * * *"    # Run at 6:00 UTC every day
-    - cron: "0 7 * * *"    # Run at 7:00 UTC every day
+    - cron: "0 6-14 * * 1-5"   # Every hour from 6 AM to 2 PM on Monday to Friday
+    - cron: "0 4,10,16,22 * * 0,6" # Every 6 hours on Saturday and Sunday
+    - cron: "30 6-7 * * *"  # Runs at 6:30 and 7:30
   workflow_dispatch:       # Allows manual triggering of the workflow
   push:
     branches: ["main"]     # Triggers deployment when changes are pushed to main
@@ -41,7 +41,9 @@ jobs:
           name: calendar
           path: previous_calendar.ics
           branch: main
-        continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
+          workflow_search: true
+          check_artifacts: true
+          if_no_artifact_found: warn
 
       # Debugging: List files after downloading the artifact
       - name: List Files After Download
@@ -63,6 +65,7 @@ jobs:
             Write-Host "::notice::Appending to the previous calendar."
             ./timeTableToIcs.ps1 -appendToPreviousICSat "./previous_calendar.ics/calendar.ics" -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -culture ${{ secrets.CULTURE }} -outAllFormats -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           } else {
+            Write-Host "::notice::No previous calendar found. Generating a new calendar."
             ./timeTableToIcs.ps1 -OutputFilePath ".out/calendar.ics" -baseUrl ${{ secrets.BASE_URL }} -elementId ${{ secrets.ELEMENT_ID }} -overrideSummaries ${{ secrets.OVERRIDE_SUMMARIES }} -outAllFormats -culture ${{ secrets.CULTURE }} -cookie ${{ secrets.COOKIE }} -tenantId ${{ secrets.TENANT_ID }} | Tee-Object -FilePath script_output.txt -Encoding utf8
           }
         shell: pwsh

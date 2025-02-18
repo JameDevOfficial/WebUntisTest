@@ -192,8 +192,10 @@ param (
 if ($outAllFormats) {
     $splitByCourse = $true
 }
-if (-not (Test-Path $appendToPreviousICSat)) {
-    $appendToPreviousICSat = $null
+if ($appendToPreviousICSat) {
+    if (-not (Test-Path $appendToPreviousICSat)) {
+        $appendToPreviousICSat = $null
+    }
 }
 
 # Convert any string inputs to DateTime objects
@@ -331,7 +333,7 @@ foreach ($date in $dates) {
             }
         }
 
-        $lastImportTimeStamp = [System.DateTimeOffset]::FromUnixTimeMilliseconds($object.lastImportTimeStamp).DateTime
+        $lastImportTimeStamp = [System.DateTimeOffset]::FromUnixTimeMilliseconds($object.data.result.lastImportTimeStamp).DateTime
     } catch [FormatException] {
         Write-Error 'Invalid Response regarding datetime format:'
         throw
@@ -598,7 +600,7 @@ END:VCALENDAR
             # Write the .ics content to a file
             if ($splitByCourse) {
                 if ($group.Name -ne 'All') {
-                    $OutputPath = $OutputFilePath.Insert($OutputFilePath.LastIndexOf('.'), "_$($group.Name -replace '[^a-zA-Z0-9]', '_')")
+                    $OutputPath = $OutputFilePath.FullName.Insert($OutputFilePath.FullName.LastIndexOf('.'), "_$($group.Name -replace '[^a-zA-Z0-9]', '_')")
                 } else {
                     $OutputPath = $OutputFilePath
                 }
