@@ -1,6 +1,6 @@
 # WebUntis Timetable to ICS
 
-[![Update Calendar and Deploy to GitHub Pages](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg)](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml)
+[![Update Calendar and Deploy to GitHub Pages](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg)](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml) | Last Push: [![Update Calendar and Deploy to GitHub Pages](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml/badge.svg?event=push)](https://github.com/Chaos02/WebUntisTimeTableToIcs/actions/workflows/GeneratePage.yml)
 
 Scrapes the official API the website uses and processes the entries into a (or multiple) subscribable ICS files.
 
