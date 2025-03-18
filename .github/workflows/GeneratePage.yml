@@ -200,16 +200,16 @@ jobs:
           echo "  <div id='status-badges'></div>" >> .out/index.html
           echo "  <script>" >> .out/index.html
           echo "    (function() {" >> .out/index.html
-          echo "      const user = window.location.host.split('.')[0];" >> .out.index.html
+          echo "      const user = window.location.host.split('.')[0];" >> .out/index.html
           echo "      const repo = window.location.pathname.split('/')[1] || '';" >> .out/index.html
           echo "      const workflow = 'GeneratePage.yml';" >> .out/index.html
           echo "      const baseUrl = 'https://github.com/' + user + '/' + repo + '/actions/workflows/' + workflow;" >> .out/index.html
           echo "      const badgeUrl = baseUrl + '/badge.svg';" >> .out/index.html
           echo "      const badgePushUrl = badgeUrl + '?event=push';" >> .out/index.html
-          echo "      document.getElementById('status-badges').innerHTML =" >> .out.index.html
-          echo "        '<a href=\"' + baseUrl + '\"><img src=\"' + badgeUrl + '\" alt=\"Update Calendar and Deploy to GitHub Pages\"/></a> | Last Push: <a href=\"' + baseUrl + '\"><img src=\"' + badgePushUrl + '\" alt=\"Last Push Badge\"/></a>';" >> .out.index.html
-          echo "    })();" >> .out.index.html
-          echo "  </script>" >> .out.index.html
+          echo "      document.getElementById('status-badges').innerHTML =" >> .out/index.html
+          echo "        '<a href=\"' + baseUrl + '\"><img src=\"' + badgeUrl + '\" alt=\"Update Calendar and Deploy to GitHub Pages\"/></a> | Last Push: <a href=\"' + baseUrl + '\"><img src=\"' + badgePushUrl + '\" alt=\"Last Push Badge\"/></a>';" >> .out/index.html
+          echo "    })();" >> .out/index.html
+          echo "  </script>" >> .out/index.html
 
           # Start the invisible table
           echo "  <table>" >> .out/index.html
