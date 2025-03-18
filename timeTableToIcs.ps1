@@ -357,9 +357,9 @@ if (-not $dontCreateMultiDayEvents) {
     if ($periods.Count -eq 0) {
         $summaryJson = [PSCustomObject]@{
             id         = 0
-            date       = ([datetime]"1970-01-01T00:00:00Z").Date.ToString('yyyyMMdd')
-            startTime  = ([datetime]"1970-01-01T00:00:00Z").ToString('hhmm')
-            endTime    = ([datetime]"1970-01-01T00:00:00Z").AddMinutes(1)
+            date       = ([datetime]"2020-01-01T00:00:00Z").Date.ToString('yyyyMMdd')
+            startTime  = ([datetime]"2020-01-01T00:00:00Z").ToString('hhmm')
+            endTime    = ([datetime]"2020-01-01T00:00:00Z").AddMinutes(1)
             course = @{
                 course = @{
                     longName = "DUMMY"
@@ -573,8 +573,10 @@ foreach ($group in $periods) {
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Chaos_02//WebUntisToIcs//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
 REFRESH-INTERVAL;VALUE=DURATION:PT3H
-X-PUBLISHED-TTL:PT12H
+X-PUBLISHED-TTL:PT6H
 X-WR-CALNAME:$(if (-not $splitByCourse) {$class.displayname} else {$class.displayname + " - $($group.Name)"})
 BEGIN:VTIMEZONE
 TZID:Europe/Berlin
