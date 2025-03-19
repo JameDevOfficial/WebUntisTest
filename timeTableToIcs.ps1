@@ -3,47 +3,58 @@
     Gets and converts a WebUntis timetable to an ICS calendar file.
 
 .DESCRIPTION
-    This script retrieves timetable data from the WebUntis API and converts it into a subscribable ICS calendar file format. 
+    This script retrieves timetable data from the WebUntis API and converts it into a subscribable ICS calendar file format.
     It allows specifying a date range for the timetable data.
 
 .PARAMETER baseUrl
     The base URL of the WebUntis API.
 
 .PARAMETER elementType
-    The type of element to filter by (default is 1, this should return a timetable).
+    The type of element (default is 1; typically returns a timetable).
 
 .PARAMETER elementId
-    The classes timetable ID.
+    The class timetable ID.
 
 .PARAMETER dates
-    An array of dates (either as strings or DateTime objects) for which to retrieve timetable data. 
+    An array of dates (either as strings or DateTime objects) for which to retrieve timetable data.
     The default is the current week and the next three weeks.
     Maximum range is defined by WebUntis admin afaik.
 
 .PARAMETER OutputFilePath
-    The file path where the ICS file will be saved. The default is "calendar.ics".
+    The file path where the ICS file will be saved. Default is "calendar.ics".
 
 .PARAMETER dontCreateMultiDayEvents
     If set, generating "summary" multi-day events will be skipped.
 
 .PARAMETER dontSplitOnGapDays
-    If set, multi-day events will NOT be split if there are gap days in the week
+    If set, multi-day events will not be split even if gap days exist between periods.
 
 .PARAMETER overrideSummaries
-    A hashtable to override the summaries of the courses. The key is the original course (short)name, the value is the new course name.
+    A hashtable to override course summaries. The key is the original (short) course name, and the value is the new course name.
 
 .PARAMETER appendToPreviousICSat
-    The path to an existing ICS file to which the new timetable data should be appended.
+    The path to an existing ICS file to which new timetable data should be appended.
+    (The file must have a .ics extension and be a valid ICS file.)
+
+.PARAMETER connectLessons
+    If set, consecutive lessons will be connected/merged if they occur within a specified maximum gap.
+
+.PARAMETER connectMaxGapMinutes
+    Maximum gap in minutes between consecutive lessons to connect.
+    Set to -1 to disable connection. Default is 15 minutes.
 
 .PARAMETER splitByCourse
-    If set, the timetable data will be split into separate ICS files for each course.
+    If set, timetable data will be split into separate ICS files for each course.
 
 .PARAMETER splitByOverrides
-    If set, the timetable data will be split into separate ICS files for each course defined in overrideSummaries and the remaining misc. classes.
+    If set, timetable data will be split into separate ICS files for each course defined in overrideSummaries and the remaining misc. classes.
 
 .PARAMETER outAllFormats
-    If set, the timetable data will be output in all formats.
-    (Implies -splitByCourse)
+    If set, outputs the timetable data in all available formats (implies -splitByCourse).
+
+.PARAMETER culture
+    Culture info used for DST/TZ adjustments and formatting date/time values.
+    Default is the system culture as returned by Get-Culture.
 
 .PARAMETER cookie
     The cookie value for the WebUntis session.
@@ -146,6 +157,9 @@ param (
         $true
     })]
     [System.IO.FileInfo]$appendToPreviousICSat,
+    [Parameter(HelpMessage = 'Maximum gap in minutes to connect lessons set to -1 to disable connection')]
+    [ValidateScript({ if ($_ -ge -1) { $true } else { throw 'The value must be a non-negative integer.' } })]
+    [int]$connectMaxGapMinutes = 15,
     [Parameter(
         ParameterSetName = 'OutputControl',
         HelpMessage = 'Split the timetable data into separate ICS files for each course.'
@@ -349,6 +363,46 @@ $periods = $periods | Sort-Object -Property startTime
 if ($periods.Length -eq 0 -or $null -eq $periods) {
     Write-Host "::warning::No Periods in the specified time frame"
     exit 0
+}
+
+if ($connectMaxGapMinutes -ne -1 -and $null -ne $connectMaxGapMinutes) {
+    for ($i = 0; $i -lt $periods.Count; $i++) {
+        if ($null -eq $periods[$i]) {
+            continue
+        }
+        $period = $periods[$i]
+        $lperiod = $periods[$i+1]
+        if (($lperiod.startTime - $period.endTime).TotalMinutes -lt 0) {
+            continue # skip overlapping periods
+        }
+        if (($lperiod.startTime - $period.endTime).TotalMinutes -le $connectMaxGapMinutes -and `
+            $lperiod.course.course.id -eq $period.course.course.id -and `
+            $lperiod.room.room.id -eq $period.room.room.id -and `
+            $lperiod.cellState -eq $period.cellState -and `
+            $lperiod.substText -eq $period.substText
+        ) {
+            $periods[$i].endTime = $lperiod.EndTime
+            $periods[$i+1] = $null
+            $i++ # skip null entry
+            continue
+        }
+        if ($i -eq 0) {
+            continue
+        }
+        $i2 = $i - 1
+        while ($null -eq $periods[$i2]) {
+            $i2--
+        }
+        if (($periods[$i2].endTime - $period.startTime).TotalMinutes -le $connectMaxGapMinutes -and `
+            $period.course.course.id -eq $periods[$i2].course.course.id -and `
+            $period.room.room.id -eq $periods[$i2].room.room.id -and `
+            $period.cellState -eq $periods[$i2].cellState -and `
+            $period.substText -eq $periods[$i2].substText
+        ) {
+            $periods[$i].endTime = $periods[$i2].endTime
+        }
+    }
+    $periods = $periods | Where-Object { $_ -ne $null }
 }
 
 if (-not $dontCreateMultiDayEvents) {
@@ -824,7 +878,7 @@ class PeriodEntry {
     }
 
     [string] ToString() {
-        return "Date: $($this.date), Start Time: $($this.startTime), Cell State: $($this.cellState), ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), End Time: $($this.endTime), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
+        return "Start Time: $($this.startTime), Cell State: $($this.cellState), ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), End Time: $($this.endTime), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
     }
 }
 
