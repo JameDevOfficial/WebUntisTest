@@ -33,8 +33,20 @@ jobs:
           branch: main
         continue-on-error: true  # Ignore errors if there's no previous artifact (first run)
 
+      - name: Check if injected 'previous ICS' exists
+        id: check-inject-ics
+        run: |
+          if (Test-Path "previous_calendar.ics/calendar.ics") {
+            echo '::warning::Injected ICS file detected at previous_calendar.ics/calendar.ics, skipping download.'
+            echo "exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "exists=false" >> $env:GITHUB_OUTPUT
+          }
+        shell: pwsh
+
       # Download the previous ICS (if available)
       - name: Download Previous ICS
+        if: steps.check-inject-ics.outputs.exists == 'false'
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: GeneratePage.yml  # Your workflow file name
