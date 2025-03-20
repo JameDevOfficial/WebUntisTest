@@ -399,7 +399,8 @@ if ($connectMaxGapMinutes -ne -1 -and $null -ne $connectMaxGapMinutes) {
             $period.cellState -eq $periods[$i2].cellState -and `
             $period.substText -eq $periods[$i2].substText
         ) {
-            $periods[$i].endTime = $periods[$i2].endTime
+            $periods[$i2].endTime = $periods[$i].endTime
+            $periods[$i] = $null
         }
     }
     $periods = $periods | Where-Object { $_ -ne $null }
@@ -878,7 +879,7 @@ class PeriodEntry {
     }
 
     [string] ToString() {
-        return "Start Time: $($this.startTime), Cell State: $($this.cellState), ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), End Time: $($this.endTime), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
+        return "Start Time: $($this.startTime), End Time: $($this.endTime), Cell State: $($this.cellState), ID: $($this.id), Lesson ID: $($this.lessonId), Lesson Number: $($this.lessonNumber), Lesson Code: $($this.lessonCode), Lesson Text: $($this.lessonText), Period Text: $($this.periodText), Has Period Text: $($this.hasPeriodText), Period Info: $($this.periodInfo), Period Attachments: $($this.periodAttachments), Subst Text: $($this.substText), Elements: $($this.elements), Student Group: $($this.studentGroup), Code: $($this.code), Priority: $($this.priority), Is Standard: $($this.isStandard), Is Event: $($this.isEvent), Room Capacity: $($this.roomCapacity), Student Count: $($this.studentCount)"
     }
 }
 

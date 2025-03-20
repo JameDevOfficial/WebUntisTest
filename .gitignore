@@ -1,2 +1,5 @@
 *.ics
+!previous_calendar.ics/
+previous_calendar.ics/*
+!previous_calendar.ics/calendar.ics
 secret*
