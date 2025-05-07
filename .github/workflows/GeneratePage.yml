@@ -2,8 +2,8 @@ name: Update Calendar and Deploy to GitHub Pages
 
 on:
   schedule:
-    - cron: "0 6-14 * * 1-5"   # Every hour from 6 AM to 2 PM on Monday to Friday
-    - cron: "0 4,10,16,22 * * 0,6" # Every 6 hours on Saturday and Sunday
+    #- cron: "0 6-14 * * 1-5"   # Every hour from 6 AM to 2 PM on Monday to Friday
+    #- cron: "0 4,10,16,22 * * 0,6" # Every 6 hours on Saturday and Sunday
     - cron: "30 6-7 * * *"  # Runs at 6:30 and 7:30
   workflow_dispatch:       # Allows manual triggering of the workflow
   push:
